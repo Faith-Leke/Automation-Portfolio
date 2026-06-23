@@ -1,0 +1,2393 @@
+{
+  "name": "Job Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        592
+      ],
+      "id": "2eb5dde6-3761-4794-ba82-6573ab2caeb4",
+      "name": "When Executed by Manager"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        944,
+        592
+      ],
+      "id": "719d9880-5e7c-4b8f-844b-5f01bd0f91b9",
+      "name": "Unit_Job_Processor"
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.job_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Return-Format",
+              "value": "markdown"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1376,
+        784
+      ],
+      "id": "a4efa191-4613-4524-b17e-b8d0dcea0d7a",
+      "name": "Extract_Job_Description",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5c41c0a8-23cd-48b4-b589-9703d5f64abc",
+              "leftValue": "={{ $json.data }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1584,
+        784
+      ],
+      "id": "534343f3-1289-4666-aa7f-acda5218abaa",
+      "name": "Is_Download_Successful?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={{ $('Pick_Available_Key').item.json.selected_api_key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    \"contents\": [{\n      \"parts\": [{\n        \"text\": `You are a Career Classification Expert specializing in automation and operations roles.\n\nYour task: Determine if this job posting is a TECHNICAL AUTOMATION or OPERATIONS ENGINEERING role that matches this profile:\n\n=== TARGET PROFILE ===\nAn AI Automation Engineer who:\n• Builds workflow automation systems (n8n, Make, Zapier)\n• Integrates APIs and creates data pipelines\n• Develops internal tools and dashboards\n• Automates revenue operations and business processes\n• Works with AI APIs (Claude, OpenAI) for intelligent workflows\n\n=== JOB POSTING ===\n${ $('Extract_Job_Description').first().json.data }\n\n=== EVALUATION CRITERIA ===\n\n0. LOCATION & ELIGIBILITY GATEKEEPER (The First Filter)\nThe candidate is based in NIGERIA (Africa) but works globally. \n\n✅ PASS (Eligibility) if:\n• Role is Fully Remote (Worldwide, Global, Anywhere, or EMEA).\n• Role is \"Remote\" with no specific country restrictions.\n• Engagement type is Full-time, Contract, or B2B (Open to all).\n\n❌ IMMEDIATE FAIL (STOP HERE) if the job explicitly requires:\n• \"Must reside in [Specific Country]\" (that is not Nigeria).\n• \"US Citizenship,\" \"Green Card,\" or \"Security Clearance.\"\n• \"Hybrid\" or \"On-site\" (Must be 100% Remote).\n\n(Note: Do NOT reject \"Full-time\" roles. Reject only if the LOCATION is restricted.)\n\n1. BUILDER vs. USER TEST (Critical)\n✅ PASS if role involves:\n• Designing/building workflows or automation\n• Connecting APIs, webhooks, or systems\n• Creating internal tools or integrations\n• Writing scripts for automation (Python, JavaScript)\n• \"Engineer,\" \"Developer,\" \"Architect,\" \"Specialist,\" \"Intern,\" or \"Trainee\" roles\n\n❌ FAIL if role involves:\n• Only USING automation tools (not building)\n• Marketing/Sales roles that mention \"automation tools\"\n• Customer Success using CRM features\n• Content creation with AI assistants\n\n2. IMPLICIT TECH STACK\n✅ PASS if mentions:\n• APIs, REST, webhooks, JSON, HTTP requests\n• System integration, data syncing, ETL/data pipelines\n• Low-code/no-code platforms, workflow engines\n• Internal tools, admin panels, dashboards\n• Python/JavaScript for automation (not web dev)\n\n3. EXPLICIT TOOL SIGNALS (High Confidence)\n✅ PASS if mentions:\n• Workflow: n8n, Make, Zapier, Tray.io, Workato, Parabola\n• Internal tools: Retool, Streamlit, admin dashboards\n• AI/LLM: OpenAI API, Anthropic API, LangChain, RAG systems\n• Data: Airbyte, Fivetran, database automation\n• Business automation: HubSpot workflows, Salesforce automation\n\n4. BUSINESS OPERATIONS CONTEXT\n✅ PASS if:\n• Revenue Operations, Sales Operations, Business Operations roles\n• GTM Systems, Deal Desk, Sales Enablement with automation focus\n• CRM workflow building (not just using)\n• Mentions: \"manual processes,\" \"data entry,\" \"streamline operations\"\n\n5. EXCLUSIONS (Auto-Reject)\n❌ FAIL if PRIMARY focus is:\n• QA Automation (Selenium, Cypress, test frameworks)\n• Industrial Automation (PLC, SCADA, robotics, manufacturing)\n• Pure Infrastructure DevOps (Kubernetes, Terraform, Jenkins as main skills)\n• Civil/Mechanical Engineering with \"automation\" in different context\n• Data Science/ML Engineering (model training, not workflow automation)\n\n⚠️ NUANCE for DevOps:\n• INCLUDE: \"DevOps Engineer - Automation Focus\" with workflow/integration keywords\n• EXCLUDE: \"DevOps Engineer\" focused solely on infrastructure/containers\n\n=== OUTPUT FORMAT ===\nRespond ONLY with valid JSON (no markdown, no preamble):\n\n{\n  \"is_valid_role\": true or false,\n  \"confidence\": \"high\" or \"medium\" or \"low\",\n  \"primary_reason\": \"One sentence explaining the decision\",\n  \"matched_signals\": [\"list\", \"of\", \"key\", \"signals\", \"found\"],\n  \"red_flags\": [\"list\", \"of\", \"concerns\", \"if\", \"any\"]\n}\n\n=== EXAMPLES ===\n(Use the logic from previous examples, omitted here for brevity but the AI understands the criteria)`\n      }]\n    }],\n    \"generationConfig\": {\n      \"temperature\": 0.1,\n      \"topP\": 0.95,\n      \"topK\": 40,\n      \"maxOutputTokens\": 8192,\n      \"responseMimeType\": \"application/json\"\n    }\n  })\n}}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2032,
+        768
+      ],
+      "id": "f48e9613-52c6-4bbd-a853-79b2a32a70b9",
+      "name": "Job_Analyzer",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cec8d77f-9a5a-4fec-86a5-bd82f99711b5",
+              "leftValue": "={{ $json.ai_analysis.is_valid_role }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2256,
+        976
+      ],
+      "id": "a552f4d6-4423-48fa-9aac-df722c0ab957",
+      "name": "Is_Job_Fit"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={{ $('Pick_Available_Key').item.json.selected_api_key }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    \"contents\": [{\n      \"parts\": [{\n        \"text\": `You are an Expert Resume Architect and Career Strategist.\nYour goal is to analyze the \"Master CV\" against the \"Job Description\" to create a tailored application strategy.\n\n=== MASTER CANDIDATE PROFILE (CONTEXT) ===\n${$('Resume_Vault').item.json.cv_text_context}\n\n=== AVAILABLE PROFESSIONAL EXPERIENCE (IDs) ===\n${$('Resume_Vault').item.json.project_list.join('\\n')}\n\n=== JOB POSTING ===\n${$('Extract_Job_Description').first().json.data}\n\n=== PART 1: THE ANALYST (SCORING RUBRIC) ===\nCalculate a fit score (0-100) using this adjusted breakdown:\n\n1. TECH STACK COVERAGE (40 points max)\n   - Identify the *Critical* tools/languages in the JD (The \"Must Haves\").\n   - Calculate what % of these specific critical tools the candidate possesses (based on Master Profile).\n   - 100% Coverage = 40pts | 75% Coverage = 30pts | 50% Coverage = 20pts | <50% Coverage = 0pts.\n\n2. COMPLEXITY MATCH (20 points max)\n   - IGNORE \"Years of Experience\" text requirements.\n   - Focus on *Project Complexity*. Does the candidate's \"Master Profile\" demonstrate the technical ability to solve the problems described in the JD?\n   - High Complexity Match (Candidate has built similar systems) = 20pts.\n   - Medium Match = 10pts.\n   - Low Match (Candidate projects are too simple) = 0pts.\n\n3. DOMAIN EXPERTISE (20 points max)\n   - Projects match specific domain (e.g., RevOps, Logistics, Email Infra) = 20pts.\n   - Related domain = 10pts.\n   - No overlap = 0pts.\n\n4. REQUIREMENTS COVERAGE (20 points max)\n   - Scan for \"Requirements\", \"Qualifications\", or \"Must Haves\".\n   - Meets ALL mandatory non-tech requirements = 20pts.\n   - Missing 1-2 mandatory requirements = 10pts.\n   - Missing 3+ mandatory requirements = 0pts.\n\n=== PART 2: THE BUILDER (STRATEGY & ASSEMBLY) ===\nYou are the strategist. You do not write the experience blocks; you select and order them.\n\n1. PROFILE REWRITE (The Writer):\n   - **JOB TITLE:** Extract the Job Title from the posting, but **CLEAN THE FORMATTING**.\n     - Remove underscores ('_'), internal job IDs (e.g., 'SROO4', 'Req-123'), and system artifacts.\n     - Remove generic location suffixes like ' - Remote' or '(Worldwide)' unless it's part of the core role name.\n     - **Example:** If JD says 'n8n_Developer___REMOTE_SROO4', you write 'n8n Developer'.\n     - **CONSTRAINT:** Do NOT add new words (e.g., do not change \"Developer\" to \"Architect\" unless the JD says so). Keep the employer's core terminology.\n   - **SUMMARY:** Rewrite the \"Profile\" summary using only facts from the Master Profile.\n- **AGGRESSIVE REFRAMING:** Actively act as a \"Chameleon.\" Translate the candidate's existing experience into the exact vocabulary of the Job Description. If the JD asks for \"Cross-functional synchronization\" and the candidate built a \"Logistics Dispatch System,\" describe the system as enabling \"cross-functional synchronization.\" Use the employer's exact phrases naturally in the SUMMARY.\n\n2. EXPERIENCE RE-RANKING (The DJ):\n   - Look at the \"AVAILABLE PROFESSIONAL EXPERIENCE\" list of IDs.\n   - Return a list of **ALL** IDs re-ordered based on relevance to this job.\n   - The most relevant experience must be #1.\n   - **CRITICAL:** You must include ALL IDs from the menu. Do not delete any. Just sort them.\n- **CRITICAL LOCK:** The ID \"consultancy_header\" is the structural anchor. It MUST always be the absolute #1 first item in your returned array. You may only re-rank the remaining projects beneath it.\n\n3. EVIDENCE SELECTION:\n   - Identify the specific technical skills from the CV that apply to this job.\n\n4. LOGISTICS CHECK:\n   - Scan for instructions (Cover letter, specific subject lines, video requests).\n\n=== THE \"DO NOT INJECT\" BOUNDARIES (ABSOLUTE) ===\nYou must aggressively reframe the summary, but you MUST NEVER hallucinate or lie. You are strictly forbidden from injecting:\n1. Years of Experience: Do not invent years of tenure. Rely on the \"June 2025 - Present\" Consultancy timeline.\n2. Degrees/Certifications: Do not invent degrees, university names, or AWS/Cloud certifications.\n3. Headcount/Team Size: Do not claim the candidate managed a team of developers. \n4. Proprietary Tools: Do not claim experience with internal/proprietary company software mentioned in the JD.\n5. Plagiarism: Do not copy entire sentences from the JD word-for-word. Weave the keywords into the candidate's actual project impacts.\n\n=== OUTPUT FORMAT (JSON ONLY) ===\nRespond ONLY with this valid JSON structure:\n\n{\n  \"analysis\": {\n    \"fit_score\": 85,\n    \"match_level\": \"High/Medium/Low\",\n    \"score_breakdown\": {\n      \"tech_stack\": 0,\n      \"complexity\": 0,\n      \"domain\": 0,\n      \"requirements\": 0\n    },\n    \"critical_missing_keywords\": [\"List of missing hard skills\"]\n  },\n  \"logistics\": {\n    \"requires_cover_letter\": true,\n    \"requires_loom_video\": false,\n    \"requires_portfolio_link\": true,\n    \"special_instructions\": \"Any specific instructions like 'Subject line: Blue Pineapple'\"\n  },\n  \"builder\": {\n    \"tailored_title\": \"The specific Job Title to use (e.g. 'Revenue Operations Engineer')\",\n    \"tailored_identity_text\": \"The rewritten 3-sentence profile summary...\",\n    \"relevant_tech_stack_list\": [\"List only the tools relevant to this specific job found in CV\"],\n    \"project_order\": [\n      {\n        \"id\": \"project_id_from_menu\",\n        \"relevance_reason\": \"Why this is #1\"\n      },\n      {\n        \"id\": \"project_id_from_menu\",\n        \"relevance_reason\": \"Why this is #2\"\n      }\n      // Continue for ALL IDs in the Menu\n    ]\n  },\n  \"cover_letter_strategy\": {\n    \"hook\": \"The specific achievement to mention in the opening line\",\n    \"key_alignment\": \"The 2 core skills to focus on in the body\"\n  }\n}\n\n=== EXAMPLES ===\n(Use the logic from previous examples, omitted here for brevity but the AI understands the criteria)`\n      }]\n    }],\n    \"generationConfig\": {\n      \"temperature\": 0.1,\n      \"maxOutputTokens\": 8192,\n      \"responseMimeType\": \"application/json\"\n    }\n  })\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2704,
+        944
+      ],
+      "id": "1926fedd-05ce-46e3-9845-78fdfb5c1108",
+      "name": "AI_Resume_Architect",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the raw text string from the Architect Node\nconst rawText = $input.item.json.candidates[0].content.parts[0].text;\n\n// 2. Clean the text (Remove markdown wrappers if the AI added them)\nconst cleanText = rawText.replace(/```json|```/g, '').trim();\n\n// 3. Parse it into a real Object\nlet parsedStrategy;\ntry {\n  parsedStrategy = JSON.parse(cleanText);\n} catch (error) {\n  // Fallback if AI output bad JSON (Rare, but good safety)\n  parsedStrategy = { error: \"Failed to parse JSON\", raw: rawText };\n}\n\n// 4. Return the merged result\n// We keep the original job data + add the new strategy\nreturn {\n  json: {\n    ...$input.item.json,\n    resume_strategy: parsedStrategy\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        928
+      ],
+      "id": "c5937d4d-fcac-421e-bf8a-8e1dca698382",
+      "name": "Parse_Architect_Response"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resume_strategy.analysis.fit_score }}",
+                    "rightValue": 75,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    },
+                    "id": "726239d9-971a-4c42-8e5e-c83d66b092c2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "High Quality Jobs"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "79743d89-9785-4e4a-b9c6-0db444834a80",
+                    "leftValue": "={{ $json.resume_strategy.analysis.fit_score }}",
+                    "rightValue": 50,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Mid_Quality_Jobs"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2ee587f8-ab36-43ae-9dea-cdca8ae67bce",
+                    "leftValue": "={{ $json.resume_strategy.analysis.fit_score }}",
+                    "rightValue": 50,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "No Show"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3104,
+        896
+      ],
+      "id": "4a0009a5-5bec-4755-a091-d63b7c86f874",
+      "name": "Jobs_Quality_Decipherer"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "29111269-9b1c-43a7-a69a-dbc90d034d27",
+              "name": "application_status",
+              "value": "\"Perfect Match 🚀\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3328,
+        816
+      ],
+      "id": "4acec08b-e56f-447c-8c9d-850f51048ecc",
+      "name": "Renamer"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "29111269-9b1c-43a7-a69a-dbc90d034d27",
+              "name": "application_status",
+              "value": "\"Manual Review Needed ⚠️\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3328,
+        976
+      ],
+      "id": "123408fd-e6e1-4360-a1a0-422990ecb690",
+      "name": "Euphemizer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={{ $('Pick_Available_Key').item.json.selected_api_key }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    \"contents\": [{\n      \"parts\": [{\n        \"text\": $('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_cover_letter \n        ? `You are Faith Leke-Akingboye. Write a cover letter that sounds like a real, confident engineer.\n\n=== THE \"HUMAN\" STYLE GUIDE (STRICT) ===\n\n1. **No Robot Words:** Do NOT use words like \"thrilled,\" \"excited,\" \"delighted,\" \"landscape,\" \"seamlessly,\" \"testament,\" \"foster,\" or \"honed.\"\n\n2. **Sentence Variety:** Do NOT start every sentence with \"I\". This sounds juvenile. Use transitional clauses (e.g., \"By leveraging...\", \"While...\", \"Specifically...\") to create a professional flow.\n\n3. **Tone:** Conversational but highly competent.\n\n=== MY ACTUAL HISTORY (SOURCE OF TRUTH) ===\n${JSON.stringify($('Resume_Vault').item.json)}\n\n**CRITICAL ACCURACY RULES:**\n1. **Timeline:** Base all claims strictly on the data above. Do not imply years of experience if the data shows months. Focus on *competence* and *complexity*.\n2. **Tense Fidelity (Vital):** You must mirror the TENSE of the Resume Vault impact statements.\n   - If the Vault says \"Eliminates $100k\" (Present Tense/Projection), you MUST write \"Eliminates\" or \"Designed to eliminate\".\n   - Do NOT change it to \"Eliminated\" (Past Tense/Done Deal). That makes me a liar.\n   - ACCURACY > STORYTELLING.\n\n=== HONESTY GUARDRAIL ===\nThe following skills are required by the JD but are marked as missing in my analysis: [${$('Parse_Architect_Response').item.json.resume_strategy.analysis.critical_missing_keywords.join(\", \")}].\n**RULE:** Do NOT claim to be an expert in these specific missing skills. Pivot to how n8n/JS solves the problem.\n\n=== JOB DETAILS ===\n${$('Extract_Job_Description').item.json.data.replace(/`/g, \"'\")}\n\n=== MY STRATEGY ===\nHook: ${$('Parse_Architect_Response').item.json.resume_strategy.cover_letter_strategy.hook}\nAlignment: ${$('Parse_Architect_Response').item.json.resume_strategy.cover_letter_strategy.key_alignment}\nSpecial Instructions: ${$('Parse_Architect_Response').item.json.resume_strategy.logistics.special_instructions}\n\n=== OUTPUT INSTRUCTIONS ===\n- Write the **Body Only**.\n- **LENGTH RULE:** If 'Special Instructions' or 'Job Details' mentions a word count (e.g., \"max 200 words\"), YOU MUST OBEY IT STRICTLY. Otherwise, keep it under 250 words.\n- End with:\n  \"Best,\n  Faith Leke-Akingboye\"` \n        : \"No Cover Letter Required.\"\n      }]\n    }],\n    \"generationConfig\": {\n      \"temperature\": 0.4,\n      \"maxOutputTokens\": 5000\n    }\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3568,
+        752
+      ],
+      "id": "565c36de-af51-4073-bd26-924c67441e56",
+      "name": "Cover_Letter_Writer",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get Inputs\nconst vault = $('Resume_Vault').item.json;\nconst strategyItem = $('Parse_Architect_Response').item;\nconst strategy = strategyItem ? strategyItem.json.resume_strategy : {};\nconst builder = strategy.builder || {};\n\n// 2. Build the Header (ATS Optimized & Reordered: LinkedIn -> Email -> Phone -> Location)\nconst headerHtml = `\n  <div class=\"header\">\n    <h1>${vault.my_name}</h1>\n    <div class=\"sub-header\">${builder.tailored_title || \"BUSINESS SYSTEMS SPECIALIST (AUTOMATION & AI)\"}</div>\n    <div class=\"contact-info\">\n      <a href=\"${vault.my_linkedin}\">LinkedIn</a> | \n      <a href=\"mailto:${vault.my_email}\">${vault.my_email}</a> | \n      <a href=\"tel:${vault.my_phone.replace(/\\+/g, '')}\">${vault.my_phone}</a> | \n      ${vault.my_location}\n    </div>\n  </div>`;\n\n// 3. Build Summary (Dynamic Replacement)\nlet summaryHtml = \"\";\nif (vault.blocks.professional_identity) {\n    summaryHtml = vault.blocks.professional_identity.replace(\n        /<p>[\\s\\S]*?<\\/p>/, \n        `<p>${builder.tailored_identity_text || \"Backend automation engineer who builds autonomous business systems that protect and generate revenue. I architect self-healing logic layers that enforce business rules, detect financial leaks, and scale operations without adding headcount.\"}</p>`\n    );\n}\n\n// 4. Build Projects (Formatted as PROFESSIONAL EXPERIENCE, strict ordering, NO numbers)\nlet projectsHtml = \"<h2>PROFESSIONAL EXPERIENCE</h2>\";\n\nif (builder.project_order && Array.isArray(builder.project_order)) {\n    builder.project_order.forEach((item) => {\n        // Handle if AI returns object {id: \"...\"} or just string \"...\"\n        const id = typeof item === 'object' ? item.id : item;\n        let blockHtml = vault.blocks[id];\n        \n        if (blockHtml) {\n            projectsHtml += blockHtml;\n        }\n    });\n} else {\n    // Fallback: Default order with no numbering\n    vault.project_list.forEach((id) => {\n         if(vault.blocks[id]) {\n             projectsHtml += vault.blocks[id];\n         }\n    });\n}\n\n// 5. CSS Styles - The \"98-Score ATS\" Polish\nconst css = `\n<style>\n  /* Page constraints to fit content cleanly */\n  @page {\n    margin: 0.75in; \n    size: A4;\n  }\n\n  body { \n    font-family: 'Arial', 'Helvetica', sans-serif; /* Safest ATS font */\n    color: #000; \n    line-height: 1.35; \n    padding: 0; \n    margin: 0 auto; \n    font-size: 10pt; /* Reduced to fit more content elegantly */\n  }\n\n  /* Clean Header */\n  .header { \n    text-align: center; \n    margin-bottom: 16px; \n  }\n  h1 { \n    font-size: 20pt; \n    font-weight: bold; \n    text-transform: uppercase; \n    margin: 0 0 4px 0; \n    letter-spacing: 0.5px; \n  }\n  .sub-header { \n    font-size: 11pt; \n    font-weight: bold; \n    text-transform: uppercase; \n    margin-bottom: 4px;\n  }\n  .contact-info { \n    font-size: 9.5pt; \n  }\n  a { \n    color: #000; \n    text-decoration: none; \n  }\n  \n  /* Section Headings - The classic ATS underline */\n  h2 { \n    font-size: 11pt; \n    font-weight: bold; \n    text-transform: uppercase; \n    margin-top: 14px; \n    margin-bottom: 8px;\n    padding-bottom: 2px;\n    border-bottom: 1px solid #000; \n  }\n  \n  p { \n    margin: 0 0 10px 0; \n    text-align: left; /* Left align is safer for ATS parsers than justify */\n  }\n  \n  /* Skills Section */\n  .competencies { \n    margin-bottom: 4px; \n    font-size: 10pt; \n    line-height: 1.4;\n  }\n  .comp-label { \n    font-weight: bold; \n  }\n  \n  /* Experience Blocks */\n  .section-block { \n    margin-bottom: 14px; \n    page-break-inside: avoid; \n  }\n  .project-title { \n    font-weight: bold; \n    text-transform: uppercase; \n    font-size: 10.5pt; \n  }\n  .project-role { \n    font-style: italic; \n    margin-top: 2px;\n    margin-bottom: 4px; \n    font-size: 10pt; \n  }\n  \n  /* Clean Bullet Points */\n  ul.bullet-list { \n    margin: 0 0 0 0; \n    padding-left: 18px; \n  }\n  li { \n    margin-bottom: 3px; \n  }\n</style>\n`;\n\n// 6. Assemble Final HTML\nconst finalHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  ${css}\n</head>\n<body>\n  ${headerHtml}\n  ${summaryHtml}\n  ${vault.blocks.core_competencies || ''}\n  ${vault.blocks.technical_stack || ''}\n  ${projectsHtml}\n  ${vault.blocks.experience || ''}\n  ${vault.blocks.education || ''}\n</body>\n</html>\n`;\n\n// 7. Return Result\nreturn {\n  json: {\n    html_content: finalHtml,\n    filename: `Resume_Faith_Leke-Akingboye_${(builder.tailored_title || 'Resume').replace(/[^a-zA-Z0-9]/g, '_')}`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3872,
+        960
+      ],
+      "id": "9a73973a-e047-40ad-9405-49bb99377743",
+      "name": "Generate_Resume_HTML"
+    },
+    {
+      "parameters": {
+        "chatId": "6294501165",
+        "text": "={{ \n// 🚨 SCENARIO 1: TOTAL FAILURE (Both Robots Died)\n$json.is_error && $json.is_pdf_error ? \n\"⚠️ *System Failure* ⚠️\\n\\nI analyzed the job, but both the Cover Letter AI and the PDF Generator timed out.\\n\\n🆔 *Role:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_title + \"\\n\\n=== JOB POST LINK ===\\n\" + $('Unit_Job_Processor').item.json.job_url :\n\n// ✍️ SCENARIO 2: WRITER'S BLOCK (Letter Failed, PDF Good)\n$json.is_error ? \n\"⚠️ *Writer's Block Detected!* ⚠️\\n\\nI generated the PDF Resume (attached below), but the Cover Letter AI timed out.\\n\\n\" +\n\"🆔 *Target Role:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_title + \n\"\\n🧠 *Strategy:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_identity_text.replace(/\\*/g, '').replace(/_/g, ' ') +\n\"\\n\\n📋 *APPLICATION LOGISTICS*\\n\" + \n\"✍️ *Cover Letter:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_cover_letter ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"🎨 *Portfolio:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_portfolio_link ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📹 *Video Intro:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_loom_video ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📝 *Instructions:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.special_instructions || \"None\") +\n\"\\n\\n📂 *Action Required:* Write cover letter manually.\\n\\n=== JOB POST LINK ===\\n\" + $('Unit_Job_Processor').item.json.job_url :\n\n// 📄 SCENARIO 3: PDF FAILURE (Letter Good, PDF Failed)\n$json.is_pdf_error ?\n($if($(\"Renamer\").isExecuted, $(\"Renamer\").item.json.application_status, $(\"Euphemizer\").item.json.application_status) + \n\"\\n\\n⚠️ *PDF Generation Failed* ⚠️\\n(The CloudConvert service timed out, but here is your Strategy & Draft)\\n\\n\" +\n\"🆔 *Target Role:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_title + \n\"\\n🧠 *Strategy:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_identity_text.replace(/\\*/g, '').replace(/_/g, ' ') +\n\"\\n\\n📋 *APPLICATION LOGISTICS*\\n\" + \n\"✍️ *Cover Letter:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_cover_letter ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"🎨 *Portfolio:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_portfolio_link ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📹 *Video Intro:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_loom_video ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📝 *Instructions:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.special_instructions || \"None\") +\n\"\\n\\n=== COVER LETTER ===\\n\\n\" + \n$json.candidates[0].content.parts[0].text.replace(/\\*/g, '•').replace(/_/g, ' ').replace(/\\[/g, '(').replace(/\\]/g, ')') + \n\"\\n\\n=== JOB POST LINK ===\\n\" + $('Unit_Job_Processor').item.json.job_url) :\n\n// 🚀 SCENARIO 4: SUCCESS (Everything Works)\n($if($(\"Renamer\").isExecuted, $(\"Renamer\").item.json.application_status, $(\"Euphemizer\").item.json.application_status) + \n\"\\n\\n🚀 *STRATEGY & DRAFT*\\n\" +\n\"🆔 *Target Role:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_title + \n\"\\n🧠 *Strategy:* \" + $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_identity_text.replace(/\\*/g, '').replace(/_/g, ' ') +\n\"\\n\\n📋 *APPLICATION LOGISTICS*\\n\" + \n\"✍️ *Cover Letter:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_cover_letter ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"🎨 *Portfolio:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_portfolio_link ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📹 *Video Intro:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.requires_loom_video ? \"✅ Required\" : \"❌ No\") + \"\\n\" +\n\"📝 *Instructions:* \" + ($('Parse_Architect_Response').item.json.resume_strategy.logistics.special_instructions || \"None\") +\n\"\\n\\n=== COVER LETTER ===\\n\\n\" + \n$json.candidates[0].content.parts[0].text.replace(/\\*/g, '•').replace(/_/g, ' ').replace(/\\[/g, '(').replace(/\\]/g, ')') + \n\"\\n\\n=== JOB POST LINK ===\\n\" + $('Unit_Job_Processor').item.json.job_url) \n}}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5088,
+        864
+      ],
+      "id": "c3ccb536-bc84-4f6b-a1c3-d0a80c0be897",
+      "name": "Send_Job_Requirements_I",
+      "webhookId": "91a030c3-249e-4682-adaf-b52d494bb1b1",
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "0dbTzHjroTbAlRhi",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "6294501165",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "=📄 Resume: {{ $('Parse_Architect_Response').item.json.resume_strategy.builder.tailored_title }}",
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5072,
+        512
+      ],
+      "id": "81dc2944-fe6d-4caf-8d3a-f93b423d5fef",
+      "name": "Send_Job_Requirements_II",
+      "webhookId": "4f2d05d1-6554-4cbd-921a-a7328b20933f",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const blocks = {\n  // --- SECTION 1: IDENTITY & COMPETENCIES ---\n  \"professional_identity\": `\n    <h2>PROFILE</h2>\n    <p>Backend automation engineer who builds autonomous business systems that protect and generate revenue. I don't just connect apps—I architect self-healing logic layers that enforce business rules, detect financial leaks, and scale operations without adding headcount. I use low-code infrastructure (n8n) to move faster than traditional dev teams, but I build with the technical rigor of a backend engineer. My core focus includes CRM Automation, intelligent data pipelines, and \"Agentic\" workflows.</p>\n  `,\n  \"core_competencies\": `\n    <div class=\"competencies\">\n      <span class=\"comp-label\">Core Competencies:</span> CRM Automation • Revenue Operations Automation • API Orchestration • LLM-Powered Workflows • AI RAG-Based Chatbots • Dashboard Automation • AI Voice Agents • Agentic Workflows\n    </div>\n  `,\n\n  // --- SECTION 2: PORTFOLIO (Projects) ---\n  \"consultancy_header\": `\n    <div class=\"section-block\" style=\"margin-bottom: 5px;\">\n      <div class=\"project-title\">INDEPENDENT AI AUTOMATION CONSULTANT</div>\n      <div class=\"project-role\">Lagos, Nigeria | Oct 2025 – Present</div>\n      <p style=\"margin-top: 5px;\">Architecting and deploying end-to-end automation systems for diverse B2B and B2C clients to eliminate operational bottlenecks and protect revenue.</p>\n    </div>`,\n  \"project_agency_revenue\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Agency Revenue Protection System</div>\n      <div class=\"project-role\">Built for: Developer Staffing Augmentation Agency | Problem Solved: Revenue leakage from unbilled hours, idle capacity, and expired contracts.</div>\n      <div style=\"font-weight:bold; margin-top:5px;\">Business Impact:</div>\n      <ul class=\"bullet-list\">\n        <li>Eliminates $100K+ annual revenue leakage from underlogged hours.</li>\n        <li>Reduces contract renewal cycle from 14 days → 2 days.</li>\n        <li>Frees 10 hours/week of operations manager time.</li>\n      </ul>\n    </div>`,\n\n  \"project_laundry_logistics\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Laundry Logistics Dispatch System</div>\n      <div class=\"project-role\">Built for: Commercial Laundry Service (B2C Operations) | Problem Solved: Manual rider assignment bottleneck during peak hours.</div>\n      <div style=\"font-weight:bold; margin-top:5px;\">Business Impact:</div>\n      <ul class=\"bullet-list\">\n        <li>Reduces average dispatch time from 30 minutes → 90 seconds.</li>\n        <li>Eliminates 100% of manual rider coordination.</li>\n        <li>Processes orders with zero failed dispatches.</li>\n      </ul>\n    </div>`,\n\n  \"project_revenue_dashboards\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Revenue Intelligence Dashboard System</div>\n      \n      <div style=\"font-weight:bold; margin-top:5px;\">System A: Capacity Intelligence Dashboard</div>\n      <p>Built for agency leadership to provide real-time views of developer availability and revenue risks. Aggregates data from Jira, Toggl, and CRM to calculate utilization rates automatically.</p>\n      <ul class=\"bullet-list\">\n        <li>Impact: Enabled proactive hiring decisions (forecasting bench gaps 6 weeks ahead) and eliminated weekly status meetings (saved 3 hours/week).</li>\n      </ul>\n\n      <div style=\"font-weight:bold; margin-top:10px;\">System B: Laundry Business Command Center</div>\n      <p>Built for operations managers to track live orders, revenue, and delivery performance with Chart.js visualizations.</p>\n      <ul class=\"bullet-list\">\n        <li>Impact: Replaced 2 hours/day of manual Excel updates and provided an audit trail for financial reconciliation.</li>\n      </ul>\n      <div style=\"font-style:italic; margin-top:5px;\"><strong>Tech Stack:</strong> n8n (data orchestration), Baserow (data warehouse), Google Sheets (visualization), Chart.js and Custom Scripting.</div>\n    </div>`,\n\n  \"project_whatsapp_agent\": `\n   <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">WhatsApp Customer Service and Order Collection Agent</div>\n      <div class=\"project-role\">Built for: Commercial Laundry Service (End-to-End Customer Experience Automation) | Problem Solved: Manual order intake bottlenecks, missed after-hours orders, and phone distractions.</div>\n      <div style=\"font-weight:bold; margin-top:5px;\">Business Impact:</div>\n      <ul class=\"bullet-list\">\n        <li>Deflects 80% of phone calls to WhatsApp (frees operations team from 50+ daily interruptions).</li>\n        <li>Enabled 24/7 order collection (captures orders from after-hours customers).</li>\n        <li>Reduced order intake time from 8 minutes (phone) → 4 minutes (Agentic chat).</li>\n      </ul>\n    </div>`,\n\n  \"project_cold_email\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Cold Email Outreach System</div>\n      <div class=\"project-role\">Built for: Client Acquisition Teams | Problem Solved: Manual prospecting doesn't scale; hiring SDRs is too expensive.</div>\n      <div style=\"font-weight:bold; margin-top:5px;\">Business Impact:</div>\n      <ul class=\"bullet-list\">\n        <li>Generated 100+ qualified leads per day.</li>\n        <li>Zero spam complaints (domain reputation maintained).</li>\n      </ul>\n    </div>`,\n\n  \"project_backlog_enrichment\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Backlog Enrichment Workflow</div>\n      <div class=\"project-role\">Built for: Sales Operations (Lead Scoring System) | Problem Solved: Incomplete lead data → Poor prioritization → Wasted SDR time.</div>\n      <div style=\"font-weight:bold; margin-top:5px;\">Business Impact:</div>\n      <ul class=\"bullet-list\">\n        <li>Allowed SDR team to focus on high-intent leads only.</li>\n        <li>Reduced 'bad data' complaints from sales.</li>\n        <li>Enabled automated lead scoring based on seniority/department.</li>\n      </ul>\n    </div>`,\n\n  \"project_job_bot\": `\n    <div class=\"section-block\" style=\"margin-left: 20px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: none;\">Autonomous Job Application System</div>\n      <div class=\"project-role\">Problem Solved: High-volume job hunting is manual, time-consuming, and has low conversion rates.</div>\n      <div style=\"margin-top:5px;\"><strong>Current Status:</strong> \"Master-Worker\" agent architecture in development; targeting 50 tailored applications/week at launch.</div>\n    </div>`,\n\n  // --- SECTION 3: TECHNICAL STACK ---\n  \"technical_stack\": `\n    <h2>TECHNICAL SKILLS</h2>\n    <div class=\"competencies\"><span class=\"comp-label\">Orchestration & Automation:</span> n8n (Expert Level), Make.com, Zapier, Webhooks, REST API Integration, Custom API Chaining.</div>\n    <div class=\"competencies\" style=\"margin-top:5px;\"><span class=\"comp-label\">Scripting & Logic:</span> HTML, CSS, Javascript, Python, NextJS</div>\n    <div class=\"competencies\" style=\"margin-top:5px;\"><span class=\"comp-label\">AI & Agents:</span> Claude (Anthropic), OpenAI(ChatGPT), Gemini, Claudecode, Gemini CLI, RAG-Based Chatbots, AI Voice Agents, Vapi, Retell, ElevenLabs,  Pinecone (Vector Database), Large Language Models (LLMs), Prompt Engineering.</div>\n    <div class=\"competencies\" style=\"margin-top:5px;\"><span class=\"comp-label\">Data & Backend:</span> Supabase, Airtable, Baserow, Google Workspace, Notion, JSON Data Structures.</div>\n    <div class=\"competencies\" style=\"margin-top:5px;\"><span class=\"comp-label\">CRM & Business Operations Management:</span> GoHighLevel (GHL), HubSpot, Asana, Clickup, Trello, Email Marketing(Klaviyo, ActiveCampaign, MailChimp), Freshdesk, WordPress(CMS Integration) WhatsApp Cloud API, Twilio, Paystack, Slack API.</div>\n  `,\n\n  // --- SECTION 4: EXPERIENCE & EDUCATION ---\n  \"experience\": `\n    <h2>ADDITIONAL EXPERIENCE</h2>\n    <div class=\"section-block\">\n      <div class=\"project-title\">OPERATIONS LEAD | STUDENT ORGANIZATION (January 2024 – January 2025)</div>\n      <div style=\"margin-bottom:5px;\">Elected to lead administrative and financial operations for a large-scale university organization (200+ members).</div>\n      <ul class=\"bullet-list\">\n        <li><strong>Transferable Skills:</strong> Deadline management under pressure, stakeholder communication, and resource allocation—the same skills required to manage SLAs and cross-functional automation projects.</li>\n      </ul>\n    </div>`,\n\n  \"education\": `\n    <h2>EDUCATION</h2>\n    <div class=\"section-block\">\n      <div class=\"project-title\">OBAFEMI AWOLOWO UNIVERSITY</div>\n      <div class=\"project-role\">Bachelor of Science in Applied Sciences | Expected Graduation: 2027</div>\n      <ul class=\"bullet-list\">\n        <li><strong>Relevant Coursework:</strong> Systems Thinking & Root-Cause Analysis (diagnostic logic for complex systems), Statistical Methods (data validation, anomaly detection), Project Management.</li>\n      </ul>\n    </div>`,\n\n  // --- SECTION 5: PHILOSOPHY ---\n  \"philosophy\": `\n    <div class=\"section-block\" style=\"margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: uppercase;\">WHY I BUILD THIS WAY</div>\n      <p style=\"font-size: 10pt; margin-top: 5px;\">\n        Most automation engineers treat tools like Zapier or n8n as 'glue' between apps. I treat them as a backend development platform.\n      </p>\n      <div style=\"font-weight:bold; font-size: 10pt; margin-top: 5px;\">My Philosophy:</div>\n      <ul class=\"bullet-list\" style=\"list-style-type: none; padding-left: 0;\">\n        <li>✓ Every workflow should have error recovery (not just 'fail and alert')</li>\n        <li>✓ Business logic should be encoded in the system (not in someone's head)</li>\n        <li>✓ Automation should reduce human decision-making (not just manual clicking)</li>\n      </ul>\n    </div>`,\n\n  // --- SECTION 6: AVAILABILITY ---\n  \"availability\": `\n    <div class=\"section-block\" style=\"font-size: 10pt; color: #555; margin-top: 30px; border-top: 2px solid #1F4E79; padding-top: 10px;\">\n      <div class=\"project-title\" style=\"font-size: 10pt; text-transform: uppercase;\">AVAILABILITY & LOGISTICS</div>\n      <ul class=\"bullet-list\" style=\"margin-top: 5px;\">\n        <li><strong>Location:</strong> Lagos, Nigeria (UTC+1) | Open to remote roles globally</li>\n        <li><strong>Work Authorization:</strong> Nigerian citizen; eligible for remote contractor agreements</li>\n        <li><strong>Preferred Role Types:</strong> Full-time, contract (6+ months), or project-based engagements</li>\n        <li><strong>Salary Expectations:</strong> Competitive with market rates for AI Automation Engineers.</li>\n      </ul>\n    </div>`\n};\n\n// --- META DATA ---\nconst my_profile = {\n  \"name\": \"FAITH LEKE-AKINGBOYE\",\n  \"Linkedin Profile\": \"https://www.linkedin.com/in/faith-leke-akingboye\",\n  \"GitHub Portfolio\": \"https://github.com/Faith-Leke/Automation-Portfolio\",\n  \"Meet Faith\": \"https://drive.google.com/file/d/1slHiwXzu9JhmOGwv8XBAQLSV_oHixTuk/view\",\n  \"email\": \"faithlekeakingboye@gmail.com\",\n  \"phone\": \"+2348101006152\",\n  \"location\": \"Lagos, Nigeria\"\n};\n\nconst tech_stack_list = [\n  \"n8n (Expert Level)\", \"Make.com\", \"Zapier\", \"Pinecone\", \"Supabase\", \"Airtable\",\n  \"Baserow\", \"GoHighLevel (GHL)\", \"HubSpot\", \"WhatsApp Cloud API\", \"Twilio\", \n  \"Paystack\", \"Slack API\", \"Gemini\", \"Claude\", \"OpenAI\", \"Python\", \"JavaScript\", \n  \"REST API\", \"Webhooks\"\n];\n\nconst cv_text_context = `\nFAITH LEKE-AKINGBOYE. AI Automation Engineer | Revenue Operations Architect.\nProjects: Agency Revenue Protection, Laundry Dispatch, Revenue Dashboards, Cold Email, Backlog Enrichment, WhatsApp Agent, Job Bot.\nTech Stack: n8n, AI Agents, RAG, CRM Automation, Baserow, GoHighLevel.\nExperience: Operations Lead.\nEducation: Obafemi Awolowo University (2027).\n`;\n\nconst project_list = [\n  \"consultancy_header\",\n  \"project_agency_revenue\",\n  \"project_laundry_logistics\",\n  \"project_revenue_dashboards\",\n  \"project_whatsapp_agent\",\n  \"project_cold_email\",\n  \"project_backlog_enrichment\",\n  \"project_job_bot\"\n];\n\nreturn {\n  json: {\n    blocks: blocks,\n    tech_stack: tech_stack_list,\n    cv_text_context: cv_text_context,\n    project_list: project_list,\n    my_name: my_profile.name,\n    my_linkedin: my_profile.linkedin,\n    my_email: my_profile.email,\n    my_phone: my_profile.phone,\n    my_location: my_profile.location\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2544,
+        768
+      ],
+      "id": "6105ce35-82f8-4194-8339-f2009b2cdd89",
+      "name": "Resume_Vault"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\n// --- SAFETY CHECK START ---\n// (This just stops the crash if Gemini sends back nothing)\nif (!item.candidates || !item.candidates[0] || !item.candidates[0].content) {\n  return {\n    json: {\n      ...item,\n      ai_analysis: { is_valid_role: false, primary_reason: \"API_FAILURE\" }\n    }\n  };\n}\n// --- SAFETY CHECK END ---\n\ntry {\n  // === YOUR ORIGINAL LOGIC IS HERE ===\n  // 1. Get the raw text\n  const rawText = item.candidates[0].content.parts[0].text;\n  \n  // 2. Clean the text (Identical to yours)\n  const cleanText = rawText.replace(/```json|```/g, '').trim();\n  \n  // 3. Parse it (Identical to yours)\n  const parsedDecision = JSON.parse(cleanText);\n\n  // 4. Return the result (Identical to yours)\n  return {\n    json: {\n      ...item, // Keeps all original job data\n      ai_analysis: parsedDecision\n    }\n  };\n  // === END OF YOUR LOGIC ===\n\n} catch (error) {\n  // --- SAFETY NET START ---\n  // If the JSON parse fails, we just say \"It's not a fit\" instead of crashing\n  return {\n    json: {\n      ...item,\n      ai_analysis: { is_valid_role: false, primary_reason: \"BAD_JSON\" }\n    }\n  };\n  // --- SAFETY NET END ---\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        752
+      ],
+      "id": "34a44d16-f354-4b60-905a-b14c825a4e7f",
+      "name": "Parse_AI_Response"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://v2.convertapi.com/convert/html/to/pdf?Secret=[API_KEY_HERE]&StoreFile=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $node[\"Generate_Resume_HTML\"].json[\"filename\"] }}.html\""
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/octet-stream",
+        "body": "={{ $node[\"Generate_Resume_HTML\"].json[\"html_content\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3936,
+        1296
+      ],
+      "id": "214525cd-2f16-495a-b8bd-7fb43aa1f250",
+      "name": "Generate_PDF_Job",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4272,
+        1456
+      ],
+      "id": "a915d22b-c79b-4ffd-99cd-94fd3aa6d408",
+      "name": "Wait_for_the_cook",
+      "webhookId": "746a0504-0667-4822-a6b9-5876e7afd59a"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.Files[0].Url }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4592,
+        1744
+      ],
+      "id": "86925706-a02f-4550-8e3d-f49c455c7928",
+      "name": "Get_me_the_food",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 3,
+        "output": "={{ Math.floor(Math.random() * 3) }}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3552,
+        1376
+      ],
+      "id": "0697a6e2-2608-4318-a48a-0d0d3c8ba013",
+      "name": "Load_Balancer"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4272,
+        1680
+      ],
+      "id": "a680b323-3ed5-4101-8d6b-13e4cae8678b",
+      "name": "Wait_for_the_cook1",
+      "webhookId": "746a0504-0667-4822-a6b9-5876e7afd59a"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4288,
+        1872
+      ],
+      "id": "98b65a29-cb5c-4454-abee-407803348c46",
+      "name": "Wait_for_the_cook2",
+      "webhookId": "746a0504-0667-4822-a6b9-5876e7afd59a"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7110792,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.title }}"
+            },
+            {
+              "fieldId": 7110793,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.company }}"
+            },
+            {
+              "fieldId": 7110794,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.job_url }}"
+            },
+            {
+              "fieldId": 7110802,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.posted_date }}"
+            },
+            {
+              "fieldId": 7110804,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.source }}"
+            },
+            {
+              "fieldId": 7110818,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.uid }}"
+            },
+            {
+              "fieldId": 7110822,
+              "fieldValue": "={{ $json.snippet || 'No available snippet' }}"
+            },
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Job Analysed - Fit"
+            }
+          ]
+        }
+      },
+      "id": "d22e4bcb-335f-49f2-b334-e0f9a5a390b9",
+      "name": "Save_New_Job",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        960
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7110792,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.title }}"
+            },
+            {
+              "fieldId": 7110793,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.company }}"
+            },
+            {
+              "fieldId": 7110794,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.job_url }}"
+            },
+            {
+              "fieldId": 7110802,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.posted_date }}"
+            },
+            {
+              "fieldId": 7110804,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.source }}"
+            },
+            {
+              "fieldId": 7110818,
+              "fieldValue": "={{ $('Unit_Job_Processor').item.json.uid }}"
+            },
+            {
+              "fieldId": 7110822,
+              "fieldValue": "={{ $json.snippet || 'No available snippet' }}"
+            },
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Job Analysed - Error"
+            }
+          ]
+        }
+      },
+      "id": "991190b1-87ad-423c-86e3-8f34e7094c7d",
+      "name": "Save_Job_Error",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        1024
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Resume Analyzed - Error"
+            }
+          ]
+        }
+      },
+      "id": "abbac345-efb3-434d-91de-9099ef9915bd",
+      "name": "Save_Failed_Resume_Analysis",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        1248
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Resume Analyzed - Fit"
+            }
+          ]
+        }
+      },
+      "id": "daf67450-804e-48c9-838e-41f0d219c474",
+      "name": "Save_Successful_Resume_Analysis",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2880,
+        720
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Cover Letter - Success"
+            }
+          ]
+        }
+      },
+      "id": "94d27e7e-edfe-4b93-9456-0b399b9cebce",
+      "name": "Save_Cover_Letter_Successful",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        3904,
+        528
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "Cover Letter - Failure"
+            }
+          ]
+        }
+      },
+      "id": "717c44bc-d961-4bd3-918f-0baf0ae378f9",
+      "name": "Save_Cover_Letter_Failure",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        3888,
+        768
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "PDF Generation - Failure"
+            }
+          ]
+        }
+      },
+      "id": "10fe9f41-98e0-461f-8730-90509c5d5307",
+      "name": "Save_PDF_Generation_Failure",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        1952
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "PDF Generation - Success"
+            }
+          ]
+        }
+      },
+      "id": "7a677ad4-319e-4a13-bdbf-02305958c7c4",
+      "name": "Save_PDF_Generation_Success",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        1280
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "PDF Download - Failure"
+            }
+          ]
+        }
+      },
+      "id": "243bb353-8867-41c1-8940-0bac2d56ebe9",
+      "name": "Save_PDF_Download_Failure",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        5536,
+        1600
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 826887,
+        "rowId": "={{ $('Save_New_Job').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7174804,
+              "fieldValue": "PDF Download - Success"
+            }
+          ]
+        }
+      },
+      "id": "6dcda542-cacf-4eda-8eaa-b5322123829b",
+      "name": "Save_PDF_Download_Success",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        5552,
+        1328
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        5552,
+        704
+      ],
+      "id": "bad2c208-2b7b-419d-ac2f-04ca6d6307f3",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5c4c21df-7555-46d1-8fda-c16dd0223cfb",
+              "leftValue": "={{ $json.job_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1248,
+        608
+      ],
+      "id": "8e841440-c6ad-4292-ab80-e51166abd22f",
+      "name": "Is URL Empty"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d9541cf-dd24-4b1c-865c-247cdcf493ef",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        1264
+      ],
+      "id": "68b69ebf-81aa-4d7a-a782-33e2004efcee",
+      "name": "Is it Telegram?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=Analysis Complete: Hard Pass. 🛑\n\n{{ $('Telegram Trigger').item.json.message.chat.first_name }}, I know you are Job Hunting but this Job is not a good fit for you\n\nHere's why I rejected it: *{{ $json.ai_analysis.primary_reason }}*\n\nI’ve skipped the application process for this one. Send me the next link! 🏹",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        1248
+      ],
+      "id": "867be822-bf82-4854-bcc4-69a824aa20f5",
+      "name": "Alert_Unfit_Job",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=Dead End Detected! 🚧\n\nI tried to track that link, but the scent went cold. It seems to be broken, empty, or inaccessible.\n\nPlease double-check:\n\nIs the URL complete?\n\nIs the job post still active?\n\nPaste a fresh link, and I'll get back to work! 🕵️‍♂️",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        992
+      ],
+      "id": "77f293c6-2ba8-42b6-b9ce-2f1fcc52f80a",
+      "name": "Alert_Invalid_Link",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d9541cf-dd24-4b1c-865c-247cdcf493ef",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        1008
+      ],
+      "id": "3ab370b0-00b6-4c3e-aff6-aa65187739bc",
+      "name": "Telegram_Alerted_Us?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d9541cf-dd24-4b1c-865c-247cdcf493ef",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        1248
+      ],
+      "id": "7220cef1-1d10-42c4-9734-82a55db3f80b",
+      "name": "Is it Telegram?1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=System Hiccup! ⚠️\n\nI found the job, but my brain (the AI server) blinked. I couldn't complete the analysis this time.\n\nStatus: Analysis Failed Action: You might want to try this link again in a few minutes.\n\nI've logged this error and am resetting my sensors. 🤖",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2032,
+        1232
+      ],
+      "id": "3cd2b715-073a-46ae-9a2d-489183ddb7a5",
+      "name": "Alert_Job_Analysis_Error",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=Perfect Match Detected! 🚀  \n\nThis job hits your criteria. I am now initiating the application protocol:  \n\n✍️ Drafting: Tailored Cover Letter 📄 Compiling: PDF Resume  \n\nHold tight—I'll send the files in about 30 seconds. ⏳",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3440,
+        496
+      ],
+      "id": "641fbf35-6617-48c0-a5f0-e448f25a1fbe",
+      "name": "Alert_Job_Fit.",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d9541cf-dd24-4b1c-865c-247cdcf493ef",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2832,
+        1248
+      ],
+      "id": "72962e8d-44df-4b21-890d-fee3baf27277",
+      "name": "Is it Telegram?2"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=System Hiccup! ⚠️\n\nI found the job, but my brain (the AI server) blinked. I couldn't complete the analysis this time.\n\nStatus: Analysis Failed Action: You might want to try this link again in a few minutes.\n\nI've logged this error and am resetting my sensors. 🤖",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3072,
+        1232
+      ],
+      "id": "d2ca5c7c-4185-4083-ad82-42eaacd0ad7e",
+      "name": "Alert_Job_Analysis_Error1",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4544,
+        752
+      ],
+      "id": "28297e6b-2cb6-4b4c-ae43-d4fd13e9bf8b",
+      "name": "Job_Ingredients_Aggregator"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2d370174-1bf9-4d29-9ef7-edba7c5910f0",
+              "name": "candidates",
+              "value": "=[\n  {\n    \"content\": {\n      \"parts\": [\n        {\n          \"text\": \"⚠️ COVER LETTER GENERATION FAILED.\"\n        }\n      ]\n    }\n  }\n]",
+              "type": "string"
+            },
+            {
+              "id": "541c739b-1434-46f6-aaa1-b40c297ee065",
+              "name": "is_error",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4208,
+        480
+      ],
+      "id": "93f042a9-1cda-4c98-81dc-3c225c65b840",
+      "name": "Mock_Letter_Fallback"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1ac2a89d-0232-4d77-a380-617afe86e485",
+              "name": "is_pdf_error",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5552,
+        1936
+      ],
+      "id": "d579e65c-b201-49b1-92f3-7fcc761999b6",
+      "name": "Mock_PDF_Fallback"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4f8c9082-3805-410e-9d31-4467c4e1f743",
+              "leftValue": "={{ $json.is_pdf_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4752,
+        752
+      ],
+      "id": "269fbd80-e29a-41b5-9940-463ab59f7a36",
+      "name": "Is_PDF_Valid?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=Manual Review Recommended! ⚠️\n\nThis job hits most of your criteria, but I've flagged it for a human check just to be safe.\n\nI am initiating the application protocol so you have the drafts ready:\n\n✍️ Drafting: Tailored Cover Letter\n📄 Compiling: PDF Resume\n\nHold tight—I'll send the files for your approval in about 30 seconds. ⏳",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3568,
+        1168
+      ],
+      "id": "7fc69d10-cc7b-48cf-8e0b-773920c61f2b",
+      "name": "Alert_Job_Fit.1",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://v2.convertapi.com/convert/html/to/pdf?Secret=[API_KEY_HERE]&StoreFile=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $node[\"Generate_Resume_HTML\"].json[\"filename\"] }}.html\""
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/octet-stream",
+        "body": "={{ $node[\"Generate_Resume_HTML\"].json[\"html_content\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3872,
+        1488
+      ],
+      "id": "e494fd31-c38d-42af-9c16-73e2b4e6df1a",
+      "name": "Generate_PDF_Job3",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "58b09fe1-8363-45a4-ac25-5b01227e7587",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3264,
+        608
+      ],
+      "id": "379c5b9d-084e-45b8-8292-9ab41e34cd3f",
+      "name": "From_Telegram"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "58b09fe1-8363-45a4-ac25-5b01227e7587",
+              "leftValue": "={{ $('Adapter Job Format').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3312,
+        1184
+      ],
+      "id": "10c0e205-cb0e-439f-8119-a567ef8b11bd",
+      "name": "From_Telegramizo?"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        960
+      ],
+      "id": "360acca5-decc-4751-bd0d-8ba5527c2565",
+      "name": "Telegram Trigger",
+      "webhookId": "5538ead3-63a5-4add-901c-431a7cb912d6"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.has_valid_link }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "09b3ed1c-a0af-4677-af69-ccdaca1b0fb0"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        592,
+        960
+      ],
+      "id": "c7751b62-857d-4387-b3fb-198a91a185c6",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the incoming text from Telegram safely\nconst messageText = $input.item.json.message?.text || \"\";\n\n// 2. Define the Pattern: Look for http:// or https:// followed by non-space characters\nconst urlRegex = /(https?:\\/\\/[^\\s]+)/;\nconst match = messageText.match(urlRegex);\n\n// 3. Logic: Did we find a link?\nif (match && match[0]) {\n  // ✅ Link Found: Output ONLY the extraction data\n  return {\n    json: {\n      job_url: match[0],        // The URL we found\n      has_valid_link: true      // Flag for the Switch Node\n    }\n  };\n} else {\n  // ❌ No Link: Output the failure flag\n  return {\n    json: {\n      has_valid_link: false     // Flag for the Switch Node\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        960
+      ],
+      "id": "c953c78d-acc8-426c-bfe4-1940e53c5009",
+      "name": "Job_Extractor"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d287d9f5-d530-4815-88cf-f3316eb72660",
+              "name": "source",
+              "value": "Telegram",
+              "type": "string"
+            },
+            {
+              "id": "ce10073d-4f00-4d7f-a127-970a47291b65",
+              "name": "title",
+              "value": "Manual Telegram Drop",
+              "type": "string"
+            },
+            {
+              "id": "e5abd261-e613-4aab-a15e-535530e9adb4",
+              "name": "company",
+              "value": "Pending Extraction...",
+              "type": "string"
+            },
+            {
+              "id": "4bcc7e03-8934-415a-b137-09351365d472",
+              "name": "posted_date",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "d5c21228-a9aa-4d5f-b7f8-82416d142685",
+              "name": "uid",
+              "value": "={{ $json.job_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "include": "except",
+        "excludeFields": "has_valid_link",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        784
+      ],
+      "id": "4dd80ba4-e79a-4fdd-80a3-375a34b4c8b2",
+      "name": "Adapter Job Format"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=I'm your Personal Job Hunter, but I can't hunt without a scent! \n\n🛑  I am strictly configured to process Job Links (Greenhouse, Lever, LinkedIn, etc.).  \n\nPlease paste a valid URL (starting with https or www) so I can analyze the role, rewrite your resume, and draft your cover letter so you can smash that application. 💼",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        1168
+      ],
+      "id": "339a57c2-d83f-41e9-ac84-da7d9e36193b",
+      "name": "Send_Invalid_Job_Link_Message",
+      "webhookId": "559a513d-c2b5-45d4-bff8-72f0c2c75909",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 844191,
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        608
+      ],
+      "id": "b1f11514-5979-4211-98d0-fa7a68b6101b",
+      "name": "Fetch_All_Keys",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// CONFIGURATION\nconst DAILY_LIMIT = 19; \n\nconst allKeys = $input.all();\n\n// 1. FILTER & TYPE SAFETY\nconst validKeys = allKeys.filter(item => {\n    // Force convert to Integer. If invalid/null, default to 0.\n    const rawUsage = item.json.Daily_Usage;\n    const currentUsage = parseInt(rawUsage, 10) || 0;\n    \n    // Store the clean number back in the item for step 3\n    item.cleanUsage = currentUsage;\n    \n    return currentUsage < DAILY_LIMIT;\n});\n\n// 2. CRITICAL STOP\nif (validKeys.length === 0) {\n    throw new Error(`⛔ STOP: All ${allKeys.length} keys are exhausted (Usage >= ${DAILY_LIMIT}). Reset Baserow counts.`);\n}\n\n// 3. SELECTION\nconst randomIndex = Math.floor(Math.random() * validKeys.length);\nconst selectedKey = validKeys[randomIndex];\n\n// 4. OUTPUT\nreturn {\n    json: {\n        selected_api_key: selectedKey.json.API_Key,\n        row_id: selectedKey.json.id,\n        // Safe Math: Guaranteed to be a number + 1\n        new_usage_count: selectedKey.cleanUsage + 1,\n        key_name: selectedKey.json.Name || \"Unknown Key\"\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        464
+      ],
+      "id": "d0469ea6-1dfb-4618-91ca-848c67bd08fe",
+      "name": "Pick_Available_Key"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 844191,
+        "rowId": "={{ $json.row_id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7280590,
+              "fieldValue": "={{ $json.new_usage_count }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        544
+      ],
+      "id": "ae9e0ba2-0c68-4178-bdf5-77a2d907b8fe",
+      "name": "Update_API_Status",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://v2.convertapi.com/convert/html/to/pdf?Secret=[API_KEY_HERE]&StoreFile=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $node[\"Generate_Resume_HTML\"].json[\"filename\"] }}.html\""
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/octet-stream",
+        "body": "={{ $node[\"Generate_Resume_HTML\"].json[\"html_content\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3904,
+        1744
+      ],
+      "id": "43da1e48-7fcf-47a0-8d1c-2301cf547f93",
+      "name": "Generate_PDF_Job4",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Unit_Job_Processor": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Is URL Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract_Job_Description": {
+      "main": [
+        [
+          {
+            "node": "Is_Download_Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is_Download_Successful?": {
+      "main": [
+        [
+          {
+            "node": "Fetch_All_Keys",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram_Alerted_Us?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job_Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Parse_AI_Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save_Job_Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is_Job_Fit": {
+      "main": [
+        [
+          {
+            "node": "Save_New_Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is it Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_Resume_Architect": {
+      "main": [
+        [
+          {
+            "node": "Save_Successful_Resume_Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Parse_Architect_Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save_Failed_Resume_Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse_Architect_Response": {
+      "main": [
+        [
+          {
+            "node": "Jobs_Quality_Decipherer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jobs_Quality_Decipherer": {
+      "main": [
+        [
+          {
+            "node": "Renamer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "From_Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Euphemizer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "From_Telegramizo?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renamer": {
+      "main": [
+        [
+          {
+            "node": "Cover_Letter_Writer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate_Resume_HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Euphemizer": {
+      "main": [
+        [
+          {
+            "node": "Cover_Letter_Writer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate_Resume_HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cover_Letter_Writer": {
+      "main": [
+        [
+          {
+            "node": "Save_Cover_Letter_Successful",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Job_Ingredients_Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save_Cover_Letter_Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_Resume_HTML": {
+      "main": [
+        [
+          {
+            "node": "Load_Balancer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send_Job_Requirements_I": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Send_Job_Requirements_II": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume_Vault": {
+      "main": [
+        [
+          {
+            "node": "AI_Resume_Architect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse_AI_Response": {
+      "main": [
+        [
+          {
+            "node": "Is_Job_Fit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_PDF_Job": {
+      "main": [
+        [
+          {
+            "node": "Save_PDF_Generation_Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait_for_the_cook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_PDF_Job3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait_for_the_cook": {
+      "main": [
+        [
+          {
+            "node": "Get_me_the_food",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_me_the_food": {
+      "main": [
+        [
+          {
+            "node": "Save_PDF_Download_Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Job_Ingredients_Aggregator",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Save_PDF_Download_Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load_Balancer": {
+      "main": [
+        [
+          {
+            "node": "Generate_PDF_Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_PDF_Job3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_PDF_Job3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait_for_the_cook1": {
+      "main": [
+        [
+          {
+            "node": "Get_me_the_food",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait_for_the_cook2": {
+      "main": [
+        [
+          {
+            "node": "Get_me_the_food",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_New_Job": {
+      "main": [
+        [
+          {
+            "node": "Resume_Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_Job_Error": {
+      "main": [
+        [
+          {
+            "node": "Is it Telegram?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_Failed_Resume_Analysis": {
+      "main": [
+        [
+          {
+            "node": "Is it Telegram?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_Cover_Letter_Failure": {
+      "main": [
+        [
+          {
+            "node": "Mock_Letter_Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_PDF_Generation_Failure": {
+      "main": [
+        [
+          {
+            "node": "Mock_PDF_Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_PDF_Download_Failure": {
+      "main": [
+        [
+          {
+            "node": "Mock_PDF_Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save_PDF_Download_Success": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is URL Empty": {
+      "main": [
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract_Job_Description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Alert_Unfit_Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram_Alerted_Us?": {
+      "main": [
+        [
+          {
+            "node": "Alert_Invalid_Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it Telegram?1": {
+      "main": [
+        [
+          {
+            "node": "Alert_Job_Analysis_Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it Telegram?2": {
+      "main": [
+        [
+          {
+            "node": "Alert_Job_Analysis_Error1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job_Ingredients_Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Is_PDF_Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock_Letter_Fallback": {
+      "main": [
+        [
+          {
+            "node": "Job_Ingredients_Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock_PDF_Fallback": {
+      "main": [
+        [
+          {
+            "node": "Job_Ingredients_Aggregator",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Is_PDF_Valid?": {
+      "main": [
+        [
+          {
+            "node": "Send_Job_Requirements_I",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ],
+        [
+          {
+            "node": "Send_Job_Requirements_II",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send_Job_Requirements_I",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_PDF_Job3": {
+      "main": [
+        [
+          {
+            "node": "Save_PDF_Generation_Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait_for_the_cook1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_PDF_Job4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save_PDF_Generation_Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait_for_the_cook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "From_Telegram": {
+      "main": [
+        [
+          {
+            "node": "Alert_Job_Fit.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "From_Telegramizo?": {
+      "main": [
+        [
+          {
+            "node": "Alert_Job_Fit.1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Manager": {
+      "main": [
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Job_Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Adapter Job Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send_Invalid_Job_Link_Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job_Extractor": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapter Job Format": {
+      "main": [
+        [
+          {
+            "node": "Unit_Job_Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_All_Keys": {
+      "main": [
+        [
+          {
+            "node": "Pick_Available_Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick_Available_Key": {
+      "main": [
+        [
+          {
+            "node": "Update_API_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_API_Status": {
+      "main": [
+        [
+          {
+            "node": "Job_Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_PDF_Job4": {
+      "main": [
+        [
+          {
+            "node": "Save_PDF_Generation_Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait_for_the_cook2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save_PDF_Generation_Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4661d08e-c428-4d52-843e-e91e326a72fc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fd454931274e0dc2480cd4ef1083ae9d111e70d5ac4fcfcc648e7ee19b427a8"
+  },
+  "nodeGroups": [],
+  "id": "gf7Hxv82j3m7MRqS",
+  "tags": []
+}

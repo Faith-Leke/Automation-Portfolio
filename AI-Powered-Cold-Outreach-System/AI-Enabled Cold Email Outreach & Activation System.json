@@ -1,0 +1,520 @@
+{
+  "name": "AI-Enabled Cold Email Outreach & Activation System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                0
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "ca309c80-1ccf-45ac-90de-1140e7ab14ae",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "databaseId": 359955,
+        "tableId": 817784,
+        "limit": 10,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 7016300,
+                "operator": "contains",
+                "value": "Ready to Pitch"
+              }
+            ]
+          }
+        }
+      },
+      "id": "7b3474d2-d5c3-4474-a140-55c068ab84df",
+      "name": "Baserow - List Records",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        -112
+      ],
+      "credentials": {
+        "baserowApi": {
+          "id": "Vjb3YcFK6ZKKT5La",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "47598076-4e7a-44da-9b75-46463ceca0de",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1840,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.selected_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a data cleaning utility. Extract the short, colloquial Brand Name from the input string.\\n\\nRULES:\\n- Remove legal entities (LLC, Inc, Ltd, Sp. z o.o.).\\n- Remove locations (UK, USA, London, Berlin).\\n- Remove industry descriptors (Recruitment, Staffing, Solutions).\\n- If multiple names exist (e.g., 'DevsBase / DevsData'), pick the most distinct brand name.\\n\\nOUTPUT JSON ONLY: { \\\"cleaned_name\\\": \\\"...\\\" }\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"RAW STRING: {{ $json['Company Name'] }}\"\n    }\n  ],\n  \"temperature\": 0.1,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "id": "0d4bca54-1991-42ef-b495-95432ddbe43a",
+      "name": "AI Agent - Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the Clean Name from Groq\nconst response = $input.item.json.choices[0].message.content;\nconst aiOutput = JSON.parse(response);\n\n// Pass through all original data + the new Clean Name\nreturn {\n  ...($input.item.json),\n  cleaned_name: aiOutput.cleaned_name\n};"
+      },
+      "id": "50717de4-3adc-41ef-a90c-a09df1b2458b",
+      "name": "Parse AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 359955,
+        "tableId": 817784,
+        "rowId": "={{ $('Baserow - List Records').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7016300,
+              "fieldValue": "Contacted"
+            }
+          ]
+        }
+      },
+      "id": "c897c46a-73a5-4396-934f-5e697c36a789",
+      "name": "Baserow - Update Record",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        224
+      ],
+      "credentials": {
+        "baserowApi": {
+          "id": "Vjb3YcFK6ZKKT5La",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "faithlekeakingboye@gmail.com",
+        "subject": "=✅ Outreach Batch Complete: {{ $today.toFormat('dd LLLL yyyy') }}",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #111827; line-height: 1.5; }\n  .container { max-width: 500px; margin: 0 auto; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }\n  .header { background-color: #F3F4F6; padding: 15px 20px; border-bottom: 1px solid #E5E7EB; }\n  .header h2 { margin: 0; font-size: 16px; font-weight: 600; color: #374151; }\n  .content { padding: 20px; }\n  .stat-box { background-color: #ECFDF5; border: 1px solid #10B981; border-radius: 6px; padding: 15px; margin-top: 15px; margin-bottom: 15px; color: #065F46; }\n  .stat-number { font-size: 24px; font-weight: 700; display: block; margin-top: 5px; color: #047857; }\n  .footer { font-size: 12px; color: #6B7280; margin-top: 20px; border-top: 1px solid #E5E7EB; padding-top: 10px; }\n</style>\n</head>\n<body>\n\n<div class=\"container\">\n  <div class=\"header\">\n    <h2>🚀 System Notification</h2>\n  </div>\n\n  <div class=\"content\">\n    <p>The daily outreach system has finished processing for the day.</p>\n\n    <div class=\"stat-box\">\n      <span>Total Leads Processed</span>\n      <span class=\"stat-number\">{{ $('Baserow - List Records').all().length }}</span>\n    </div>\n\n    <p><strong>Status:</strong> Completed successfully.</p>\n    \n    <div class=\"footer\">\n      This is an automated message. Check Baserow to view the updated \"Contacted\" statuses.\n    </div>\n  </div>\n</div>\n\n</body>\n</html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        -256
+      ],
+      "id": "fa91e781-4714-4b1c-bc14-ffd38d7a90df",
+      "name": "Send_Success_Message",
+      "webhookId": "d6745cd1-2f1e-493b-a25b-4d2c42702661",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 500,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BB3EBY94eHnsX7zM",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. The Vault: Array of your 5 Groq API Keys\n// REPLACE these placeholders with your actual keys from your 5 accounts\nconst keys = [ \n  \"gsk_f7hD7yBOMzX\",\n  \"gsk_apIg69NgwVVhs7DhH\",\n  \"gsk_cJ4aBndeJe3\",\n  \"gsk_kdEaT7r6o6pq5c\"\n];\n\n// 2. The Spinner: Pick a random index from 0 to 4\nconst randomIndex = Math.floor(Math.random() * keys.length);\nconst selectedKey = keys[randomIndex];\n\n// 3. Output: Pass the selected key + keep existing data\nreturn {\n  json: {\n    ...$input.item.json, // Keep the Jina data/Lead data safe\n    selected_key: selectedKey // The chosen key for this specific run\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        -64
+      ],
+      "id": "93c3120f-a822-40f5-bdb3-a70042d47c6b",
+      "name": "Key_Rotator"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $runIndex % 3 }}",
+                    "rightValue": "={{ 0 }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "267b633e-b2c7-4feb-a113-02249093f9fe"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3861c456-13f2-41e3-9f94-2fb16e61c7cc",
+                    "leftValue": "={{ $runIndex % 3 }}",
+                    "rightValue": "={{ 1 }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "8dcd13e3-cd4b-4d6a-9fe9-b43f4215ccef",
+                    "leftValue": "={{ $runIndex % 3 }}",
+                    "rightValue": "={{ 2 }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2224,
+        208
+      ],
+      "id": "ddab822e-166f-47c7-af66-6ec1c01bd9af",
+      "name": "Triage_the_Mails."
+    },
+    {
+      "parameters": {
+        "fromEmail": "faithlekeakingboye@gmail.com",
+        "toEmail": "={{ $('Baserow - List Records').item.json.Email && $('Baserow - List Records').item.json.Email.includes('@') ? $('Baserow - List Records').item.json.Email : 'iamthefxgeek@gmail.com' }}",
+        "subject": "=Revenue leakage at {{ $json['cleaned_name'] }}?",
+        "html": "=<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  /* Reset & Base */\n  body {\n    margin: 0;\n    padding: 0;\n    font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n    color: #1a202c;\n    line-height: 1.8;\n  }\n  \n  /* Container */\n  .email-wrapper {\n    padding: 40px 20px;\n  }\n  \n  .email-container {\n    max-width: 600px;\n    margin: 0 auto;\n    background-color: #ffffff;\n    border-radius: 12px;\n    overflow: hidden;\n    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);\n  }\n  \n  /* Header Accent */\n  .header-accent {\n    height: 6px;\n    background: linear-gradient(90deg, #f093fb 0%, #f5576c 50%, #4facfe 100%);\n  }\n  \n  /* Content Area */\n  .content {\n    padding: 45px 40px;\n  }\n  \n  /* Typography */\n  p {\n    margin: 0 0 18px 0;\n    font-size: 16px;\n    color: #2d3748;\n  }\n  \n  .greeting {\n    font-size: 18px;\n    margin-bottom: 26px;\n    color: #1a202c;\n    font-weight: 500;\n  }\n  \n  strong {\n    color: #2b6cb0;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n  }\n  \n  /* Highlight Box */\n  .highlight-box {\n    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);\n    border-left: 4px solid #667eea;\n    padding: 28px 32px;\n    margin: 32px 0;\n    border-radius: 8px;\n    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.08);\n  }\n  \n  .list-item {\n    margin-bottom: 18px;\n    font-size: 15.5px;\n    line-height: 1.7;\n    color: #2d3748;\n    padding-left: 28px;\n    position: relative;\n  }\n  \n  .list-item:before {\n    content: \"\";\n    position: absolute;\n    left: 0;\n    top: 8px;\n    width: 18px;\n    height: 18px;\n    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);\n    border-radius: 50%;\n    box-shadow: 0 2px 6px rgba(245, 87, 108, 0.3);\n  }\n  \n  .list-item:last-child {\n    margin-bottom: 0;\n  }\n  \n  .list-item strong {\n    color: #1a202c;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n  }\n  \n  /* CTA */\n  .cta {\n    font-size: 17px;\n    font-weight: 700;\n    color: #ffffff;\n    margin: 32px 0 0 0;\n    line-height: 1.6;\n    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n    padding: 20px 28px;\n    border-radius: 8px;\n    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.25);\n  }\n  \n  /* Signature */\n  .signature {\n    margin-top: 45px;\n    padding-top: 25px;\n    border-top: 2px solid transparent;\n    background: linear-gradient(white, white) padding-box,\n                linear-gradient(90deg, #f093fb 0%, #f5576c 50%, #4facfe 100%) border-box;\n  }\n  \n  .signature-name {\n    font-size: 17px;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n    margin: 0 0 6px 0;\n  }\n  \n  .signature-title {\n    font-size: 14px;\n    color: #718096;\n    margin: 0;\n    font-weight: 500;\n  }\n  \n  /* Decorative Elements */\n  .corner-accent {\n    position: absolute;\n    width: 100px;\n    height: 100px;\n    opacity: 0.06;\n  }\n  \n  .corner-accent-tl {\n    top: 0;\n    left: 0;\n    background: linear-gradient(135deg, #667eea 0%, transparent 100%);\n    border-radius: 0 0 100% 0;\n  }\n  \n  .corner-accent-br {\n    bottom: 0;\n    right: 0;\n    background: linear-gradient(135deg, transparent 0%, #764ba2 100%);\n    border-radius: 100% 0 0 0;\n  }\n  \n  .content-wrapper {\n    position: relative;\n  }\n  \n  /* Footer Accent */\n  .footer-accent {\n    height: 6px;\n    background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);\n  }\n  \n  /* Responsive */\n  @media only screen and (max-width: 600px) {\n    .content {\n      padding: 35px 25px;\n    }\n    \n    p, .list-item {\n      font-size: 15px;\n    }\n    \n    .highlight-box {\n      padding: 22px 24px;\n      margin: 25px 0;\n    }\n    \n    .cta {\n      font-size: 16px;\n      padding: 18px 24px;\n    }\n  }\n</style>\n</head>\n<body>\n\n<div class=\"email-wrapper\">\n  <div class=\"email-container\">\n    \n    <!-- Header Accent -->\n    <div class=\"header-accent\"></div>\n    \n    <!-- Main Content -->\n    <div class=\"content\">\n      <div class=\"content-wrapper\">\n        <!-- Decorative Corner Accents -->\n        <div class=\"corner-accent corner-accent-tl\"></div>\n        <div class=\"corner-accent corner-accent-br\"></div>\n        \n        <p class=\"greeting\">Hi {{ $json['cleaned_name'] }} team,</p>\n\n        <p>Most firms hire more operations managers as they scale. That is a <strong>bug, not a feature.</strong></p>\n\n        <p>Business operations shouldn't be about tedious maintenance. It should be \"self-healing.\"</p>\n\n        <p>As an Operations Architect, I help Developer Staff Augmentation firms like yours automate the time-consuming repetitive tasks that erode margins. Instead of manually chasing data, <strong>I build</strong> workflows that:</p>\n\n        <div class=\"highlight-box\">\n          <div class=\"list-item\"><strong>1. Maintain your capacity planner</strong> to support the CTO with real-time data.</div>\n          <div class=\"list-item\"><strong>2. Keep the CRM updated</strong> with clean data and zero drift on contract stages.</div>\n          <div class=\"list-item\"><strong>3. Manage the talent pipeline</strong> to keep candidate statuses current (recruiting ops).</div>\n          <div class=\"list-item\"><strong>4. Review developer timesheets and draft accurate invoices</strong> to flag inconsistencies early.</div>\n        </div>\n\n        <p class=\"cta\">Are you open to a short Loom intro showing how this logic would work for {{ $json['cleaned_name'] }}?</p>\n\n        <!-- Signature -->\n        <div class=\"signature\">\n          <p class=\"signature-name\">Faith Leke-Akingboye</p>\n          <p class=\"signature-title\">AI-Native Operations Architect</p>\n        </div>\n      </div>\n    </div>\n    \n    <!-- Footer Accent -->\n    <div class=\"footer-accent\"></div>\n    \n  </div>\n</div>\n\n</body>\n</html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1824,
+        256
+      ],
+      "id": "9f4680ff-b537-426a-ae92-f1b9726be61b",
+      "name": "Send email_0",
+      "webhookId": "7bf3ce28-870f-4d7c-a8c0-00b5fc50c2f0"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * 6) + 3 }}",
+        "unit": "minutes"
+      },
+      "id": "fa0a2ec2-5449-4053-b460-0a0cbde26e98",
+      "name": "Random Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1664,
+        96
+      ],
+      "webhookId": "random-wait-webhook"
+    },
+    {
+      "parameters": {
+        "fromEmail": "faithlekeakingboye@gmail.com",
+        "toEmail": "faithlekeakingboye@gmail.com",
+        "subject": "Revenue leakage at G2i?",
+        "html": "=<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  /* Reset & Base */\n  body {\n    margin: 0;\n    padding: 0;\n    font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;\n    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n    color: #1a202c;\n    line-height: 1.8;\n  }\n  \n  /* Container */\n  .email-wrapper {\n    padding: 40px 20px;\n  }\n  \n  .email-container {\n    max-width: 600px;\n    margin: 0 auto;\n    background-color: #ffffff;\n    border-radius: 12px;\n    overflow: hidden;\n    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);\n  }\n  \n  /* Header Accent */\n  .header-accent {\n    height: 6px;\n    background: linear-gradient(90deg, #f093fb 0%, #f5576c 50%, #4facfe 100%);\n  }\n  \n  /* Content Area */\n  .content {\n    padding: 45px 40px;\n  }\n  \n  /* Typography */\n  p {\n    margin: 0 0 18px 0;\n    font-size: 16px;\n    color: #2d3748;\n  }\n  \n  .greeting {\n    font-size: 18px;\n    margin-bottom: 26px;\n    color: #1a202c;\n    font-weight: 500;\n  }\n  \n  strong {\n    color: #2b6cb0;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n  }\n  \n  /* Highlight Box */\n  .highlight-box {\n    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);\n    border-left: 4px solid #667eea;\n    padding: 28px 32px;\n    margin: 32px 0;\n    border-radius: 8px;\n    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.08);\n  }\n  \n  .list-item {\n    margin-bottom: 18px;\n    font-size: 15.5px;\n    line-height: 1.7;\n    color: #2d3748;\n    padding-left: 28px;\n    position: relative;\n  }\n  \n  .list-item:before {\n    content: \"\";\n    position: absolute;\n    left: 0;\n    top: 8px;\n    width: 18px;\n    height: 18px;\n    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);\n    border-radius: 50%;\n    box-shadow: 0 2px 6px rgba(245, 87, 108, 0.3);\n  }\n  \n  .list-item:last-child {\n    margin-bottom: 0;\n  }\n  \n  .list-item strong {\n    color: #1a202c;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n  }\n  \n  /* CTA */\n  .cta {\n    font-size: 17px;\n    font-weight: 700;\n    color: #ffffff;\n    margin: 32px 0 0 0;\n    line-height: 1.6;\n    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n    padding: 20px 28px;\n    border-radius: 8px;\n    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.25);\n  }\n  \n  /* Signature */\n  .signature {\n    margin-top: 45px;\n    padding-top: 25px;\n    border-top: 2px solid transparent;\n    background: linear-gradient(white, white) padding-box,\n                linear-gradient(90deg, #f093fb 0%, #f5576c 50%, #4facfe 100%) border-box;\n  }\n  \n  .signature-name {\n    font-size: 17px;\n    font-weight: 700;\n    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n    background-clip: text;\n    margin: 0 0 6px 0;\n  }\n  \n  .signature-title {\n    font-size: 14px;\n    color: #718096;\n    margin: 0;\n    font-weight: 500;\n  }\n  \n  /* Decorative Elements */\n  .corner-accent {\n    position: absolute;\n    width: 100px;\n    height: 100px;\n    opacity: 0.06;\n  }\n  \n  .corner-accent-tl {\n    top: 0;\n    left: 0;\n    background: linear-gradient(135deg, #667eea 0%, transparent 100%);\n    border-radius: 0 0 100% 0;\n  }\n  \n  .corner-accent-br {\n    bottom: 0;\n    right: 0;\n    background: linear-gradient(135deg, transparent 0%, #764ba2 100%);\n    border-radius: 100% 0 0 0;\n  }\n  \n  .content-wrapper {\n    position: relative;\n  }\n  \n  /* Footer Accent */\n  .footer-accent {\n    height: 6px;\n    background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);\n  }\n  \n  /* Responsive */\n  @media only screen and (max-width: 600px) {\n    .content {\n      padding: 35px 25px;\n    }\n    \n    p, .list-item {\n      font-size: 15px;\n    }\n    \n    .highlight-box {\n      padding: 22px 24px;\n      margin: 25px 0;\n    }\n    \n    .cta {\n      font-size: 16px;\n      padding: 18px 24px;\n    }\n  }\n</style>\n</head>\n<body>\n\n<div class=\"email-wrapper\">\n  <div class=\"email-container\">\n    \n    <!-- Header Accent -->\n    <div class=\"header-accent\"></div>\n    \n    <!-- Main Content -->\n    <div class=\"content\">\n      <div class=\"content-wrapper\">\n        <!-- Decorative Corner Accents -->\n        <div class=\"corner-accent corner-accent-tl\"></div>\n        <div class=\"corner-accent corner-accent-br\"></div>\n        \n        <p class=\"greeting\">Hi Gabe,</p>\n\n        <p>Most firms hire more operations managers as they scale. That is a <strong>bug, not a feature.</strong></p>\n\n        <p>Business operations shouldn't be about tedious maintenance. It should be \"self-healing.\"</p>\n\n        <p>As an Operations Architect, I help Developer Staff Augmentation firms like yours automate the time-consuming repetitive tasks that erode margins. Instead of manually chasing data, <strong>I build</strong> workflows that:</p>\n\n        <div class=\"highlight-box\">\n          <div class=\"list-item\"><strong>1. Maintain your capacity planner</strong> to support the CTO with real-time data.</div>\n          <div class=\"list-item\"><strong>2. Keep the CRM updated</strong> with clean data and zero drift on contract stages.</div>\n          <div class=\"list-item\"><strong>3. Manage the talent pipeline</strong> to keep candidate statuses current (recruiting ops).</div>\n          <div class=\"list-item\"><strong>4. Review developer timesheets and draft accurate invoices</strong> to flag inconsistencies early.</div>\n        </div>\n\n        <p class=\"cta\">Are you open to a short Loom intro showing how this logic would work for G2i?</p>\n\n        <!-- Signature -->\n        <div class=\"signature\">\n          <p class=\"signature-name\">Faith Leke-Akingboye</p>\n          <p class=\"signature-title\">AI-Native Operations Architect</p>\n        </div>\n      </div>\n    </div>\n    \n    <!-- Footer Accent -->\n    <div class=\"footer-accent\"></div>\n    \n  </div>\n</div>\n\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2208,
+        624
+      ],
+      "id": "e6e223ef-3775-42a7-a60a-54b0761dbcc0",
+      "name": "Send email",
+      "webhookId": "1757f624-fcb7-4697-9667-ca222bc1f1bd"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        624
+      ],
+      "id": "bd4eeb47-4e96-4102-83ba-2489859084a8",
+      "name": "SIngle_Run_Mail"
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-02-01T09:00:13.008+01:00",
+          "Readable date": "February 1st 2026, 9:00:13 am",
+          "Readable time": "9:00:13 am",
+          "Day of week": "Sunday",
+          "Year": "2026",
+          "Month": "February",
+          "Day of month": "01",
+          "Hour": "09",
+          "Minute": "00",
+          "Second": "13",
+          "Timezone": "Africa/Lagos (UTC+01:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Baserow - List Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baserow - List Records": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Send_Success_Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Key_Rotator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Groq": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "Triage_the_Mails.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baserow - Update Record": {
+      "main": [
+        [
+          {
+            "node": "Random Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Key_Rotator": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email_0": {
+      "main": [
+        [
+          {
+            "node": "Baserow - Update Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Triage_the_Mails.": {
+      "main": [
+        [
+          {
+            "node": "Send email_0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send email_0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send email_0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Random Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIngle_Run_Mail": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3ddfed41-a9fa-4c4f-b3fa-59ba15095108",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fd454931274e0dc2480cd4ef1083ae9d111e70d5ac4fcfcc648e7ee19b427a8"
+  },
+  "nodeGroups": [],
+  "id": "gf7Hxv82j3m7MRqS",
+  "tags": []
+}

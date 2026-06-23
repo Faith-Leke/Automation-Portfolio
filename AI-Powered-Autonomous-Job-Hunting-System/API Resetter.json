@@ -1,0 +1,153 @@
+{
+  "name": "API Resetter",
+  "nodes": [
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 844191,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        4832,
+        416
+      ],
+      "id": "b8eb9722-c83e-4c71-a9f7-d1f04ad366f6",
+      "name": "Get_the_freaking_API's",
+      "credentials": {
+        "baserowApi": {
+          "id": "Vjb3YcFK6ZKKT5La",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 844191,
+        "rowId": "={{ $json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7280590,
+              "fieldValue": "1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        5088,
+        416
+      ],
+      "id": "e2ee87b3-54d9-4f3b-984f-04a83ac56f37",
+      "name": "Update_them_all",
+      "credentials": {
+        "baserowApi": {
+          "id": "Vjb3YcFK6ZKKT5La",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        4576,
+        416
+      ],
+      "id": "da93a0b9-307f-46f8-b21c-bc373b0ba2b9",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "[Put your Email Here]",
+        "subject": "SYSTEM REPORT",
+        "emailType": "text",
+        "message": "=Hi Faith\n\nThe API Limit for the Day has been reset successfully",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        5296,
+        416
+      ],
+      "id": "d0c376a2-25b5-440c-868a-286ee702daac",
+      "name": "Send_Status_Report",
+      "webhookId": "b68cea85-94d2-4d68-8465-d2a22077fd9b",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BB3EBY94eHnsX7zM",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get_the_freaking_API's": {
+      "main": [
+        [
+          {
+            "node": "Update_them_all",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get_the_freaking_API's",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_them_all": {
+      "main": [
+        [
+          {
+            "node": "Send_Status_Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a1a81688-c319-4ec1-a7be-e04857d2fd6a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fd454931274e0dc2480cd4ef1083ae9d111e70d5ac4fcfcc648e7ee19b427a8"
+  },
+  "nodeGroups": [],
+  "id": "gf7Hxv82j3m7MRqS",
+  "tags": []
+}

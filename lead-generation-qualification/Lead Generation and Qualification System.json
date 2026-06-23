@@ -1,0 +1,711 @@
+{
+  "name": "Lead Generation and Qualification System",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// 1. The Vault: Array of your 5 Groq API Keys\n// REPLACE these placeholders with your actual keys from your 5 accounts\nconst keys = [ \n  \"gsk_f7hD7yBOMzXbJzsOC\",\n  \"gsk_apIg69Ngbkue8qek\",\n  \"gsk_cJ41An57BW1sS6\",\n  \"gsk_kdEaT\"\n];\n\n// 2. The Spinner: Pick a random index from 0 to 4\nconst randomIndex = Math.floor(Math.random() * keys.length);\nconst selectedKey = keys[randomIndex];\n\n// 3. Output: Pass the selected key + keep existing data\nreturn {\n  json: {\n    ...$input.item.json, // Keep the Jina data/Lead data safe\n    selected_key: selectedKey // The chosen key for this specific run\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        0
+      ],
+      "id": "4cfd11c4-74dc-4323-8a3e-d9ed9046eb78",
+      "name": "Key_Rotator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the website text from the Jina node (Check 'data' or 'content')\n// We reference the Jina node directly to get the source text\nconst jinaData = $('Jina_Scraper').item.json;\nconst text = jinaData.data || jinaData.content || \"\";\n\n// 2. The \"Regex\" pattern to find emails\n// This looks for anything like word@word.com\nconst emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9._-]+)/gi;\n\n// 3. Extract all matches\nlet emails = text.match(emailPattern) || [];\n\n// 4. Clean the list (Remove duplicates and lowercase everything)\nemails = [...new Set(emails.map(email => email.toLowerCase()))];\n\n// 5. Remove \"junk\" files that look like emails (image.png, script.js)\nconst junkExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.js', '.css', '.svg', '.webp'];\nemails = emails.filter(email => !junkExtensions.some(ext => email.endsWith(ext)));\n\n// 6. The \"Priority\" Sorter\n// We want \"jane@\" BEFORE \"info@\". \n// If an email starts with these generic words, push it to the back.\nconst genericPrefixes = ['info', 'contact', 'hello', 'support', 'admin', 'sales', 'enquiries', 'office', 'jobs', 'careers'];\n\nemails.sort((a, b) => {\n  const aIsGeneric = genericPrefixes.some(prefix => a.startsWith(prefix));\n  const bIsGeneric = genericPrefixes.some(prefix => b.startsWith(prefix));\n\n  if (aIsGeneric && !bIsGeneric) return 1; // b comes first\n  if (!aIsGeneric && bIsGeneric) return -1; // a comes first\n  return 0;\n});\n\n// 7. Output the best email found (or null if none)\nreturn {\n  json: {\n    ...$input.item.json, // Keep all previous data from the AI/Switch node\n    extracted_email: emails.length > 0 ? emails[0] : null, // The #1 best email\n    all_emails: emails.join(\", \"), // A list of all emails found (for reference)\n    email_status: emails.length > 0 ? \"Found\" : \"Manual Check Needed\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        224
+      ],
+      "id": "3098c8ae-9f61-47a0-85b6-072104c104d8",
+      "name": "Extract_Emails"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- CONFIGURATION ---\nconst BATCH_SIZE = 15; \nconst atlas = {\n  // 🇵🇱 POLAND\n  \"Poland\": [\n    { city: \"Warsaw\", country: \"Poland\" }, { city: \"Krakow\", country: \"Poland\" },\n    { city: \"Wroclaw\", country: \"Poland\" }, { city: \"Poznan\", country: \"Poland\" },\n    { city: \"Gdansk\", country: \"Poland\" }, { city: \"Katowice\", country: \"Poland\" },\n    { city: \"Lodz\", country: \"Poland\" }, { city: \"Gdynia\", country: \"Poland\" },\n    { city: \"Rzeszow\", country: \"Poland\" }, { city: \"Lublin\", country: \"Poland\" },\n    { city: \"Szczecin\", country: \"Poland\" }, { city: \"Bielsko-Biala\", country: \"Poland\" },\n    { city: \"Gliwice\", country: \"Poland\" }, { city: \"Bydgoszcz\", country: \"Poland\" },\n    { city: \"Bialystok\", country: \"Poland\" }\n  ],\n  // 🇷🇴 ROMANIA\n  \"Romania\": [\n    { city: \"Bucharest\", country: \"Romania\" }, { city: \"Cluj-Napoca\", country: \"Romania\" },\n    { city: \"Timisoara\", country: \"Romania\" }, { city: \"Iasi\", country: \"Romania\" },\n    { city: \"Brasov\", country: \"Romania\" }, { city: \"Sibiu\", country: \"Romania\" },\n    { city: \"Constanta\", country: \"Romania\" }, { city: \"Oradea\", country: \"Romania\" },\n    { city: \"Craiova\", country: \"Romania\" }, { city: \"Galati\", country: \"Romania\" },\n    { city: \"Ploiesti\", country: \"Romania\" }, { city: \"Arad\", country: \"Romania\" },\n    { city: \"Pitesti\", country: \"Romania\" }, { city: \"Bacau\", country: \"Romania\" },\n    { city: \"Targu Mures\", country: \"Romania\" }\n  ],\n  // 🇬🇧 UK\n  \"United Kingdom\": [\n    { city: \"London\", country: \"United Kingdom\" }, { city: \"Manchester\", country: \"United Kingdom\" },\n    { city: \"Birmingham\", country: \"United Kingdom\" }, { city: \"Leeds\", country: \"United Kingdom\" },\n    { city: \"Glasgow\", country: \"United Kingdom\" }, { city: \"Bristol\", country: \"United Kingdom\" },\n    { city: \"Edinburgh\", country: \"United Kingdom\" }, { city: \"Cambridge\", country: \"United Kingdom\" },\n    { city: \"Reading\", country: \"United Kingdom\" }, { city: \"Belfast\", country: \"United Kingdom\" },\n    { city: \"Newcastle\", country: \"United Kingdom\" }, { city: \"Liverpool\", country: \"United Kingdom\" },\n    { city: \"Sheffield\", country: \"United Kingdom\" }, { city: \"Nottingham\", country: \"United Kingdom\" },\n    { city: \"Cardiff\", country: \"United Kingdom\" }\n  ],\n  // 🇺🇸 USA\n  \"United States\": [\n    { city: \"Austin\", country: \"United States\" }, { city: \"Denver\", country: \"United States\" },\n    { city: \"Atlanta\", country: \"United States\" }, { city: \"Miami\", country: \"United States\" },\n    { city: \"Raleigh\", country: \"United States\" }, { city: \"Salt Lake City\", country: \"United States\" },\n    { city: \"Phoenix\", country: \"United States\" }, { city: \"Nashville\", country: \"United States\" },\n    { city: \"Charlotte\", country: \"United States\" }, { city: \"Portland\", country: \"United States\" },\n    { city: \"Dallas\", country: \"United States\" }, { city: \"Houston\", country: \"United States\" },\n    { city: \"Minneapolis\", country: \"United States\" }, { city: \"Tampa\", country: \"United States\" },\n    { city: \"Columbus\", country: \"United States\" }\n  ]\n};\n\n// 2. Get the \"Memory\" (FIXED: Added $ prefix)\nconst staticData = $getWorkflowStaticData('global');\nlet currentIndex = staticData.countryIndex;\n\n// 3. Safety Check: First Run\nif (typeof currentIndex !== 'number') {\n  currentIndex = 0;\n}\n\n// 4. Select Country\nconst countryKeys = Object.keys(atlas);\nconst targetCountry = countryKeys[currentIndex];\nlet targetCities = atlas[targetCountry];\n\nif (!targetCities || targetCities.length === 0) {\n  throw new Error(`Atlas Error: No cities found for ${targetCountry}`);\n}\n\n// 5. Volume Knob\ntargetCities = targetCities.slice(0, BATCH_SIZE);\n\n// 6. Logging (helpful for debugging)\nconsole.log(`[Atlas] Batch ${currentIndex + 1}/${countryKeys.length}: ${targetCountry} (${targetCities.length} cities)`);\n\n// 7. Update Memory for NEXT run\nstaticData.countryIndex = (currentIndex + 1) % countryKeys.length;\nstaticData.lastRun = new Date().toISOString();\nstaticData.lastCountry = targetCountry;\n\n// 8. Output\nreturn targetCities.map(item => ({\n  ...item,\n  current_batch_country: targetCountry\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        256
+      ],
+      "id": "b796a00f-59ea-47fc-94a6-6442dc4a267d",
+      "name": "Define_Appropriate_Inputs",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                0,
+                6,
+                5,
+                4,
+                3,
+                2,
+                1
+              ],
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        16
+      ],
+      "id": "5c52ea6e-ff02-42f7-994e-00f676d55b4e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.website }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Return-Format",
+              "value": "markdown"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        800,
+        0
+      ],
+      "id": "cca9e6f9-28f5-4f44-8e84-963920322159",
+      "name": "Jina_Scraper",
+      "retryOnFail": true,
+      "waitBetweenTries": 500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 359955,
+        "tableId": 817784,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7016294,
+              "fieldValue": "={{ $('Is_New_Lead').item.json.title }}"
+            },
+            {
+              "fieldId": 7016296,
+              "fieldValue": "={{ $('Is_New_Lead').item.json.website }}"
+            },
+            {
+              "fieldId": 7016298,
+              "fieldValue": "={{ $json.extracted_email ? $json.extracted_email : 'No Email Found' }}"
+            },
+            {
+              "fieldId": 7016300,
+              "fieldValue": "Ready to Pitch"
+            },
+            {
+              "fieldId": 7016299,
+              "fieldValue": "={{ JSON.parse($node[\"AI_Classify_Business\"].json.choices[0].message.content).reason }}"
+            },
+            {
+              "fieldId": 7016297,
+              "fieldValue": "={{ $('Define_Appropriate_Inputs').item.json.country }}"
+            },
+            {
+              "fieldId": 7016301,
+              "fieldValue": "={{ $json.email_status }}"
+            },
+            {
+              "fieldId": 7016302,
+              "fieldValue": "={{ JSON.parse($node[\"AI_Classify_Business\"].json.choices[0].message.content).product_fit }}"
+            },
+            {
+              "fieldId": 7016303,
+              "fieldValue": "={{ JSON.parse($node[\"AI_Classify_Business\"].json.choices[0].message.content).category }}"
+            },
+            {
+              "fieldId": 7016295,
+              "fieldValue": "={{ $('Is_New_Lead').item.json.address }}"
+            }
+          ]
+        }
+      },
+      "id": "e2349b32-e696-4f32-8908-5b17d952682b",
+      "name": "Save_New_Lead",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.choices?.[0]?.message?.content ? JSON.parse($json.choices[0].message.content).category : 'Not_Relevant' }}",
+                    "rightValue": "Staff_Aug_Shop",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "87449710-1a1d-4dfc-8e2f-f4005641f5ee"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "The Techiies"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "21b383e3-7158-4e15-9ff5-97eb1f0b86df",
+                    "leftValue": "={{ $json.choices?.[0]?.message?.content ? JSON.parse($json.choices[0].message.content).category : 'Not_Relevant' }}",
+                    "rightValue": "Hybrid_Model",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "The Generalizers"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f0f144e2-1f02-4705-bc8f-3e37a9ed2f24",
+                    "leftValue": "={{ $json.choices?.[0]?.message?.content ? JSON.parse($json.choices[0].message.content).category : 'Not_Relevant' }}",
+                    "rightValue": "Traditional_Recruiter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Trash"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "047d209c-fd4f-4fd8-99a1-3ec23572d883",
+                    "leftValue": "={{ $json.choices?.[0]?.message?.content ? JSON.parse($json.choices[0].message.content).category : 'Not_Relevant' }}",
+                    "rightValue": "Not_Relevant",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Not_Relevant"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        208
+      ],
+      "id": "a47088ab-dd6c-4164-b037-a015b9977dbc",
+      "name": "Triage_AI_Response"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        128
+      ],
+      "id": "0ab99d41-d6bf-4514-99f6-b03f4ef73863",
+      "name": "Wait",
+      "webhookId": "bad96dc7-1e44-4c20-bda7-2b1a39e7679e"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.selected_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a B2B Lead Classifier for a software development staff augmentation service. Your goal is to identify companies that provide SOFTWARE DEVELOPERS on a contract/leasing basis (staff augmentation model), NOT traditional IT recruiters who place permanent employees. You must output ONLY valid JSON.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"INPUT DATA:\\n- Company Name: {{ JSON.stringify($('Is_New_Lead').item.json.title || '').slice(1, -1) }}\\n- Category: {{ JSON.stringify($('Is_New_Lead').item.json.category || '').slice(1, -1) }}\\n- Website Content: {{ JSON.stringify(($json.data || $json.content || '').substring(0, 15000)).slice(1, -1) }}\\n\\nCLASSIFICATION RULES:\\n\\n1. \\\"Staff_Aug_Shop\\\" -> Companies that LEASE/RENT developers to clients. Key signals:\\n   - Uses terms: \\\"staff augmentation\\\", \\\"dedicated teams\\\", \\\"team extension\\\", \\\"dev staffing\\\", \\\"outstaffing\\\", \\\"developer leasing\\\"\\n   - Offers \\\"nearshore/offshore development teams\\\"\\n   - Clients \\\"scale their team\\\" or \\\"extend their capacity\\\"\\n   - Developers remain employed by the vendor, NOT the client\\n   - Examples: BairesDev, Toptal, Turing, EPAM (staff aug division)\\n\\n2. \\\"Traditional_Recruiter\\\" -> Permanent placement agencies. Red flags:\\n   - Terms: \\\"permanent placement\\\", \\\"direct hire\\\", \\\"executive search\\\", \\\"talent acquisition\\\"\\n   - Focuses on resumes, candidate databases, job boards\\n   - Mentions \\\"placement fee\\\" or \\\"contingency recruitment\\\"\\n   - Examples: Robert Half Technology, CyberCoders, Insight Global\\n\\n3. \\\"Project_Based_Shop\\\" -> Custom software agencies that BUILD products (not staff aug). Red flags:\\n   - Terms: \\\"end-to-end development\\\", \\\"MVP development\\\", \\\"product design\\\"\\n   - Sells \\\"projects\\\" or \\\"solutions\\\", not \\\"teams\\\"\\n   - Portfolio of client apps/websites\\n   - Examples: Thoughtbot, Pivotal Labs, local web agencies\\n\\n4. \\\"Hybrid_Model\\\" -> Does BOTH staff aug AND project work. Accept these if staff aug is clearly mentioned:\\n   - Must explicitly mention \\\"staff augmentation\\\" OR \\\"dedicated teams\\\" in content\\n   - If only says \\\"custom development\\\" -> classify as Project_Based_Shop\\n\\n5. \\\"Not_Relevant\\\" -> Not in software/tech services:\\n   - SaaS products, consulting firms, training academies, job boards\\n   - Physical staffing (warehouses, healthcare, etc.)\\n\\nEDGE CASE LOGIC:\\n- \\\"Software development services\\\" alone -> Check for \\\"team extension\\\" keywords. If absent -> Project_Based_Shop\\n- \\\"IT staffing\\\" -> Check if they mention \\\"contract developers\\\" vs \\\"permanent hire\\\". Contract = Staff_Aug_Shop, Permanent = Traditional_Recruiter\\n- \\\"Consulting\\\" -> Only accept if they say \\\"staff augmentation\\\" or \\\"team augmentation\\\"\\n- Freelance platforms (Upwork-style) -> Not_Relevant (we want B2B vendors, not marketplaces)\\n\\nPRODUCT_FIT GUIDE:\\n- Staff_Aug_Premium: Pure staff aug shops with 50+ devs\\n- Staff_Aug_Standard: Smaller shops or hybrids\\n- Maybe_Fit: Hybrids where project work dominates\\n- No_Fit: All other categories\\n\\nOUTPUT FORMAT: Provide a JSON object with keys: category (one of the 5 above), confidence (0-100), reason (2 sentence explanation), product_fit (one of the 4 above), key_evidence (array of 2-3 direct quotes from content that support classification).\"\n    }\n  ],\n  \"temperature\": 0.0,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "f7345ef4-be54-4d60-bb5b-bbbac2c45ddb",
+      "name": "AI_Classify_Business"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eb6377a5-706d-488d-94a7-f0e3f22a3209",
+      "name": "Is_New_Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        784,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        608,
+        144
+      ],
+      "id": "e8d3b816-2c6a-496e-9209-4ad6fda7b80e",
+      "name": "Merge_Check"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "places",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        144,
+        272
+      ],
+      "id": "41432e21-bec9-492d-be04-bcd08d4c6d71",
+      "name": "Unpack Leads"
+    },
+    {
+      "parameters": {},
+      "id": "c2f7e1ca-f33e-4f6d-9c14-2a67b8c873de",
+      "name": "NoOp_Duplicate",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        944,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "databaseId": 359955,
+        "tableId": 817784,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 7016296,
+                "value": "={{ $json.website }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "712e0907-395f-4a13-a81c-169b19653a1f",
+      "name": "Check_Existing",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        432,
+        304
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 500
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f62da834-7939-42cd-80b5-e54419ad5c7f",
+      "name": "Batch_Processing",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/places",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "6121c45df3eaa389"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "=Software Staff Augmentation services in {{ $json.city }}, {{ $json.country }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d9478420-2377-4eeb-983c-20f533ab1493",
+      "name": "Get_Leads_Outscraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 500
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Key_Rotator": {
+      "main": [
+        [
+          {
+            "node": "AI_Classify_Business",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Define_Appropriate_Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jina_Scraper": {
+      "main": [
+        [
+          {
+            "node": "Key_Rotator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract_Emails": {
+      "main": [
+        [
+          {
+            "node": "Save_New_Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Triage_AI_Response": {
+      "main": [
+        [
+          {
+            "node": "Extract_Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract_Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Triage_AI_Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_Classify_Business": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is_New_Lead": {
+      "main": [
+        [
+          {
+            "node": "Jina_Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp_Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge_Check": {
+      "main": [
+        [
+          {
+            "node": "Is_New_Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define_Appropriate_Inputs": {
+      "main": [
+        [
+          {
+            "node": "Get_Leads_Outscraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_Existing": {
+      "main": [
+        [
+          {
+            "node": "Merge_Check",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Save_New_Lead": {
+      "main": [
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unpack Leads": {
+      "main": [
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NoOp_Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Batch_Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch_Processing": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Merge_Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check_Existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Leads_Outscraper": {
+      "main": [
+        [
+          {
+            "node": "Unpack Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2e4d4eb3-5943-4db1-aa60-7471b27b6cdb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fd454931274e0dc2480cd4ef1083ae9d111e70d5ac4fcfcc648e7ee19b427a8"
+  },
+  "nodeGroups": [],
+  "id": "gf7Hxv82j3m7MRqS",
+  "tags": []
+}

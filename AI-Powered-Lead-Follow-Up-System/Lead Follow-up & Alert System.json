@@ -1,0 +1,205 @@
+{
+  "name": "Lead Follow-up & Alert System",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "id": "49767d7f-073e-44ef-a3b9-b75bb36fd574",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        160
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "fINcYSztSg7Q5DMy",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 359955,
+        "tableId": 817784,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 7016298,
+                "value": "={{ $json.From.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9._-]+)/)[0] }}"
+              },
+              {
+                "field": 7016300,
+                "operator": "contains",
+                "value": "Contacted"
+              }
+            ]
+          }
+        }
+      },
+      "id": "cab35117-b99b-4df2-bada-39bab67d1188",
+      "name": "Baserow - Lookup Lead",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        -688,
+        160
+      ],
+      "credentials": {
+        "baserowApi": {
+          "id": "dcAglJSrUErJrFNn",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get Data\nconst lead = $('Baserow - Lookup Lead').item.json;\nconst emailData = $('Gmail Trigger').item.json;\n\n// --- HELPER: Force data into a string safely ---\nfunction safeString(input) {\n  if (!input) return \"Unknown\";\n  if (typeof input === 'object') return input.value || JSON.stringify(input); \n  return String(input);\n}\n\n// 2. Clean Email Logic\nconst fromHeader = emailData.From || \"\";\nconst emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9._-]+)/gi;\nconst cleanEmail = fromHeader.match(emailRegex) ? fromHeader.match(emailRegex)[0] : fromHeader;\nconst senderName = fromHeader.split('<')[0].trim() || cleanEmail;\n\n// 3. Clean Text for Slack\nconst rawCompany = lead['Company Name'];\nconst rawStatus = lead['Pipeline Management']; \nconst rawBody = emailData.snippet;\n\nconst cleanCompany = safeString(rawCompany).replace(/[\"\\\\]/g, \"\");\nconst cleanStatus = safeString(rawStatus).replace(/[\"\\\\]/g, \"\");\nconst cleanBody = safeString(rawBody).replace(/[\"\\\\]/g, \"'\").substring(0, 500);\n\n// 4. Return Clean Data (Simple & Fast)\nreturn {\n  company_name: cleanCompany,\n  sender_name: senderName,\n  sender_email: cleanEmail,\n  pipeline_status: cleanStatus,\n  body: cleanBody\n};"
+      },
+      "id": "b6725092-bff9-49c5-a6fb-1cf0b0ebb65f",
+      "name": "Extract Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "mode": "id",
+          "value": "U0A8GT61QDB"
+        },
+        "text": "=*🚨 New Reply from {{ $json.company_name }}*\n\n*Sender:* {{ $json.sender_name }}\n*Status:* {{ $json.pipeline_status }}\n\n> _{{ $json.body.replace(/[\\n\\r]/g, ' ') }}..._\n\n<https://mail.google.com/mail/u/0/#search/{{ $json.sender_email }}|👉 Open Thread in Gmail>",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        -224,
+        160
+      ],
+      "id": "1c8f35df-f534-4e8b-8536-5b875520275c",
+      "name": "Send Success Delivery Message",
+      "webhookId": "3598fe2f-b7af-4135-accd-b6c1f47f4cf8",
+      "credentials": {
+        "slackApi": {
+          "id": "MGTFLE6quVDXY7Cw",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 359955,
+        "tableId": 817784,
+        "rowId": "={{ $('Baserow - Lookup Lead').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7016300,
+              "fieldValue": "Responded"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        160
+      ],
+      "id": "269f0076-6854-4144-a8a0-38205817c728",
+      "name": "Update_to_Responded",
+      "retryOnFail": true,
+      "credentials": {
+        "baserowApi": {
+          "id": "dcAglJSrUErJrFNn",
+          "name": "Baserow account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Baserow - Lookup Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baserow - Lookup Lead": {
+      "main": [
+        [
+          {
+            "node": "Extract Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Send Success Delivery Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_to_Responded": {
+      "main": [
+        []
+      ]
+    },
+    "Send Success Delivery Message": {
+      "main": [
+        [
+          {
+            "node": "Update_to_Responded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "a4383ce5-2bf0-483e-bce1-93e87360d8ae",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f3b07acb977073472e1d4e223448584c4dfe5a4bd86898633eadd0172c71b118"
+  },
+  "id": "X5wjhU0bfEA5QcNtgRBPF",
+  "tags": []
+}

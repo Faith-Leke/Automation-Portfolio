@@ -1,0 +1,587 @@
+{
+  "name": "AI_Powered Job Application Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            },
+            {
+              "triggerAtHour": 12
+            },
+            {
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "id": "b3672186-bcb4-49ca-8c9b-c1015b5b671a",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1088,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 824877,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 7092928,
+                "value": "true"
+              },
+              {
+                "field": 7286250,
+                "operator": "contains",
+                "value": "PENDING"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        480
+      ],
+      "id": "441a7684-4782-4fb0-aac2-e68ccae88975",
+      "name": "Get_Job_Sources",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The Worker returns an array of items. We want to flatten them into a single list.\nconst allJobs = [];\n\n// Iterate over all executions of the worker\nfor (const execution of $input.all()) {\n  // Sometimes the worker output is inside 'json', sometimes it's direct\n  const jobData = execution.json;\n\n  // We only want items that have a URL (valid jobs)\n  if (jobData && jobData.job_url) {\n    allJobs.push({json: jobData});\n  }\n}\n\nreturn allJobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        224
+      ],
+      "id": "af850bfa-2b77-4784-ab87-d2f0ff0850a8",
+      "name": "Flatten_Results",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 826887,
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "id": "f1fa35ef-1cde-4421-ac5d-d751a737f20e",
+      "name": "Get_Existing_UIDs",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        528,
+        16
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "uid",
+        "joinMode": "keepNonMatches",
+        "outputDataFrom": "input2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        704,
+        208
+      ],
+      "id": "a0afe4db-f88a-4e8d-94cd-265be661375a",
+      "name": "Embracizo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $('Pick_Available_Key').item.json.selected_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.URL }}"
+            },
+            {
+              "name": "num",
+              "value": "20"
+            },
+            {
+              "name": "tbs",
+              "value": "qdr:w"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ba7d701c-bbd8-43c7-9baf-48e3ce5b757b",
+      "name": "Google_Search_Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -16,
+        224
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -224,
+        208
+      ],
+      "id": "a751c2fd-6801-4d03-8389-826c65c352e0",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        416
+      ],
+      "id": "83b61f79-50b0-4782-941c-c47575c5663f",
+      "name": "Wait",
+      "webhookId": "64ee3788-c479-4189-ba78-473c47b33214"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARSE GOOGLE RESULTS & FIX DATES\nconst results = [];\nconst items = $input.all();\n\n// Helper: Convert \"3 days ago\" to ISO Date\nfunction parseRelativeDate(dateStr) {\n    if (!dateStr) return new Date().toISOString();\n    const today = new Date();\n    \n    if (dateStr.includes('hour') || dateStr.includes('min')) {\n        return today.toISOString();\n    }\n    \n    if (dateStr.includes('day')) {\n        const days = parseInt(dateStr.match(/\\d+/)[0]);\n        today.setDate(today.getDate() - days);\n        return today.toISOString();\n    }\n    \n    // Try standard date parse\n    const parsed = Date.parse(dateStr);\n    if (!isNaN(parsed)) {\n        return new Date(parsed).toISOString();\n    }\n    return new Date().toISOString();\n}\n\nfor (const item of items) {\n  const searchResults = item.json.organic || [];\n  \n  // Get Source Name\n  let sourceName = \"Google_Search\";\n  try {\n       sourceName = item.pairedItem.item.json.Name; \n  } catch(e) {}\n\n  for (const result of searchResults) {\n      const title = result.title;\n      const link = result.link;\n      const snippet = result.snippet || \"\";\n      const rawDate = result.date || \"\"; \n      const realDate = parseRelativeDate(rawDate); // Returns ISO String\n\n      // --- 🚨 NEW: THE 3-DAY FILTER 🚨 ---\n      const jobDate = new Date(realDate);\n      const today = new Date();\n      // Calculate difference in milliseconds\n      const diffTime = Math.abs(today - jobDate);\n      // Convert to days (1000ms * 60s * 60m * 24h)\n      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); \n\n      // If older than 3 days, SKIP this loop iteration\n      if (diffDays > 3) {\n          continue; \n      }\n      // ------------------------------------\n\n      // Extract Company Name\n      let company = \"Unknown\";\n      if (title.includes(\" at \")) {\n          company = title.split(\" at \").pop();\n      } else if (title.includes(\" - \")) {\n          company = title.split(\" - \")[0];\n      }\n\n      results.push({\n          json: {\n              title: title,\n              company: company,\n              job_url: link,\n              posted_date: realDate,\n              source: sourceName,\n              uid: link,\n              snippet: snippet\n          }\n      });\n  }\n}\n\nreturn results;"
+      },
+      "id": "fb16ddce-a579-47a5-8bc4-2eb63e8d675b",
+      "name": "Normalize_Results/Filter_Stale_Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        224
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 824877,
+        "rowId": "={{ $('Loop Over Items').item.json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7286250,
+              "fieldValue": "Completed"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        416
+      ],
+      "id": "ab054b57-9c73-4d38-b0f8-69d79cd67f87",
+      "name": "Update_Job_Source_Status",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 844855,
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        208
+      ],
+      "id": "c6105362-c748-475e-b9c4-c6c9dc002a73",
+      "name": "Fetch_All_Keys",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// CONFIGURATION\nconst DAILY_LIMIT = 2500; \n\nconst allKeys = $input.all();\n\n// 1. FILTER & TYPE SAFETY\nconst validKeys = allKeys.filter(item => {\n    // Force convert to Integer. If invalid/null, default to 0.\n    const rawUsage = item.json.Daily_Usage;\n    const currentUsage = parseInt(rawUsage, 10) || 0;\n    \n    // Store the clean number back in the item for step 3\n    item.cleanUsage = currentUsage;\n    \n    return currentUsage < DAILY_LIMIT;\n});\n\n// 2. CRITICAL STOP\nif (validKeys.length === 0) {\n    throw new Error(`⛔ STOP: All ${allKeys.length} keys are exhausted (Usage >= ${DAILY_LIMIT}). Reset Baserow counts.`);\n}\n\n// 3. SELECTION\nconst randomIndex = Math.floor(Math.random() * validKeys.length);\nconst selectedKey = validKeys[randomIndex];\n\n// 4. OUTPUT\nreturn {\n    json: {\n        selected_api_key: selectedKey.json.API_Key,\n        row_id: selectedKey.json.id,\n        // Safe Math: Guaranteed to be a number + 1\n        new_usage_count: selectedKey.cleanUsage + 1,\n        key_name: selectedKey.json.Name || \"Unknown Key\"\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        480
+      ],
+      "id": "8ad4df19-0a4b-4367-bb59-f10928acaa9f",
+      "name": "Pick_Available_Key"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 844855,
+        "rowId": "={{ $json.row_id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7286485,
+              "fieldValue": "={{ $json.new_usage_count }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        192
+      ],
+      "id": "3681999c-9bbe-42d4-8a86-3d3301155d4d",
+      "name": "Update_API_Status",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 364431,
+        "tableId": 824877,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 7286250,
+                "operator": "contains",
+                "value": "Completed"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "20f120dc-1271-497b-9e23-4fef565d20fd",
+      "name": "Get_the_freaking_Jobs",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "databaseId": 364431,
+        "tableId": 824877,
+        "rowId": "={{ $json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 7286250,
+              "fieldValue": "Pending"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        192,
+        0
+      ],
+      "id": "a1a090e5-bc48-40c8-8753-e84fcfdafdea",
+      "name": "Update_the_Freaking_Job_Status",
+      "credentials": {
+        "baserowApi": {
+          "id": "ZE2JheMUB7hW0a1Z",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QnB5hTZKn3RqP7MI",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/QnB5hTZKn3RqP7MI"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        336
+      ],
+      "id": "b4fe1a64-49c8-4568-be15-9a6b3d6ef87d",
+      "name": "Call 'Job Processor'",
+      "retryOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch_All_Keys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Job_Sources": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten_Results": {
+      "main": [
+        [
+          {
+            "node": "Get_Existing_UIDs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Embracizo",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get_Existing_UIDs": {
+      "main": [
+        [
+          {
+            "node": "Embracizo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embracizo": {
+      "main": [
+        [
+          {
+            "node": "Call 'Job Processor'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Get_the_freaking_Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google_Search_Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize_Results/Filter_Stale_Jobs": {
+      "main": [
+        [
+          {
+            "node": "Flatten_Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_Job_Source_Status": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch_All_Keys": {
+      "main": [
+        [
+          {
+            "node": "Pick_Available_Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick_Available_Key": {
+      "main": [
+        [
+          {
+            "node": "Update_API_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_API_Status": {
+      "main": [
+        [
+          {
+            "node": "Get_Job_Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_the_freaking_Jobs": {
+      "main": [
+        [
+          {
+            "node": "Update_the_Freaking_Job_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Job Processor'": {
+      "main": [
+        [
+          {
+            "node": "Update_Job_Source_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google_Search_Jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize_Results/Filter_Stale_Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5e6416c5-19b7-4ea1-b0ba-7c243fbd89e4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5cd9719b52381e9f5c4f4531952b63df6477b5501da20850e2091c239734dc27"
+  },
+  "id": "uzJ6zH4Uk8CY6Kdn",
+  "tags": []
+}
