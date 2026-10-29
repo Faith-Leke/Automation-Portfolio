@@ -1,0 +1,1154 @@
+{
+  "name": "outreach-drafter-leads-gmail",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "name": "1 Start Batch",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "outreach_config",
+        "returnAll": true
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "name": "2 Read Run Config",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "outreach_runs",
+        "returnAll": true,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "running"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "name": "3 Read Active Runs",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "outreach_ledger",
+        "returnAll": true
+      },
+      "id": "a0000000-0000-4000-8000-000000000004",
+      "name": "4 Read Ledger Index",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfgArr = $('Read Run Config').all().map(i => i.json).filter(r => r && r.key);\nconst cfg = Object.fromEntries(cfgArr.map(r => [r.key, String(r.value).trim()]));\nconst runs   = $('Read Active Runs').all().map(i => i.json).filter(r => r && r.run_id);\nconst ledger = $('Read Ledger Index').all().map(i => i.json).filter(r => r && r.email_hash);\n\nconst MIN = 1000 * 60;\nconst now = Date.now();\nconst runId = 'run_' + DateTime.now().toFormat('yyyyMMdd_HHmm');\n\nconst block = [];\nif (cfg.kill_switch !== 'false') block.push('kill_switch=' + (cfg.kill_switch ?? 'MISSING'));\nconst active = runs.filter(r => r.status === 'running' &&\n  now - new Date(r.started_at).getTime() < 4 * 60 * MIN);\nif (active.length) block.push('active_run=' + active[0].run_id);\n\nconst maxDrafts = Number(cfg.max_drafts_per_run ?? NaN);\nif (!Number.isFinite(maxDrafts) || maxDrafts < 1) block.push('max_drafts_per_run invalid');\n\nconst url = cfg.leads_pdf_url ?? '';\nconst m = url.match(/\\/d\\/([a-zA-Z0-9_-]{10,})/) || url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);\nif (!m) block.push('leads_pdf_url unparseable');\n\nreturn [{ json: {\n  clear_to_run: block.length === 0,\n  block_reason: block.join('; '),\n  run_id: runId,\n  max_drafts: maxDrafts,\n  batch_size: Number(cfg.batch_size ?? 25),\n  max_parse_failure_pct: Number(cfg.max_parse_failure_pct ?? 2),\n  drive_file_id: m ? m[1] : null,\n  // Full ledger rows. Dedupe AND retry eligibility are both decided in Node 11,\n  // so exactly one node owns the \"new / done / retryable\" policy.\n  ledger_rows: ledger,\n}}];\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000005",
+      "name": "5 Preflight Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "clear-1",
+              "leftValue": "={{ $json.clear_to_run }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "6 Clear To Run?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "create",
+        "tableId": "outreach_runs",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "run_id",
+              "fieldValue": "={{ $json.run_id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "blocked"
+            },
+            {
+              "fieldId": "started_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "finished_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "blocked_reason",
+              "fieldValue": "={{ $json.block_reason }}"
+            },
+            {
+              "fieldId": "drafted",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "failed",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "valid",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "total_parsed",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "duplicates",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "parse_failures",
+              "fieldValue": "={{ 0 }}"
+            },
+            {
+              "fieldId": "deferred",
+              "fieldValue": "={{ 0 }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000007",
+      "name": "6a Log Blocked Run",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        500
+      ],
+      "onError": "stopWorkflow",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=Outreach batch blocked by preflight: {{ $json.blocked_reason ?? $json.block_reason }}. Run {{ $json.run_id ?? '' }} logged status=blocked. No drafts were created."
+      },
+      "id": "a0000000-0000-4000-8000-000000000008",
+      "name": "7 Run Blocked",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "create",
+        "tableId": "outreach_runs",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "run_id",
+              "fieldValue": "={{ $json.run_id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "running"
+            },
+            {
+              "fieldId": "started_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000009",
+      "name": "8 Mark Run Running",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ],
+      "onError": "stopWorkflow",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Preflight Gate').first().json.drive_file_id }}"
+        },
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000010",
+      "name": "9 Download Leads PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1750,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "joinPages": true
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000011",
+      "name": "10 Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        2000,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// SHA-256 (pure JS). `require('crypto')` is NOT available in the Code node unless the\n// instance allowlists the module, so the hash is computed inline. Input here is always\n// an ASCII email address, which is all this implementation needs to support.\nfunction sha256hex(ascii) {\n  const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));\n  const mathPow = Math.pow;\n  const maxWord = mathPow(2, 32);\n  let result = '';\n  const words = [];\n  const asciiBitLength = ascii.length * 8;\n  const hash = [];\n  const k = [];\n  let primeCounter = 0;\n  const isComposite = {};\n  for (let candidate = 2; primeCounter < 64; candidate++) {\n    if (!isComposite[candidate]) {\n      for (let i = 0; i < 313; i += candidate) isComposite[i] = candidate;\n      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;\n      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;\n    }\n  }\n  ascii += '\\x80';\n  while (ascii.length % 64 - 56) ascii += '\\x00';\n  for (let i = 0; i < ascii.length; i++) {\n    const j = ascii.charCodeAt(i);\n    if (j >> 8) return '';\n    words[i >> 2] |= j << (((3 - i) % 4) * 8);\n  }\n  words[words.length] = (asciiBitLength / maxWord) | 0;\n  words[words.length] = asciiBitLength;\n  for (let j = 0; j < words.length;) {\n    const w = words.slice(j, (j += 16));\n    const oldHash = hash.slice(0, 8);\n    const h = hash.slice(0, 8);\n    for (let i = 0; i < 64; i++) {\n      const w15 = w[i - 15];\n      const w2 = w[i - 2];\n      const a = h[0];\n      const e = h[4];\n      const temp1 = h[7]\n        + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))\n        + ((e & h[5]) ^ (~e & h[6]))\n        + k[i]\n        + (w[i] = i < 16 ? w[i] : (\n            w[i - 16]\n            + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))\n            + w[i - 7]\n            + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))\n          ) | 0);\n      const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))\n        + ((a & h[1]) ^ (a & h[2]) ^ (h[1] & h[2]));\n      h.unshift((temp1 + temp2) | 0);\n      h.length = 9;\n      h[4] = (h[4] + temp1) | 0;\n      h.length = 8;\n    }\n    for (let i = 0; i < 8; i++) hash[i] = (h[i] + oldHash[i]) | 0;\n  }\n  for (let i = 0; i < 8; i++) {\n    for (let j = 3; j + 1; j--) {\n      const b = (hash[i] >> (j * 8)) & 255;\n      result += (b < 16 ? '0' : '') + b.toString(16);\n    }\n  }\n  return result;\n}\n\nconst gate = $('Preflight Gate').first().json;\nconst raw = ($json.text ?? '').replace(/\\r/g, '');\n\n// Full ledger rows, keyed by hash — the single source of dedupe AND retry state.\nconst prior = new Map((gate.ledger_rows ?? []).map(r => [r.email_hash, r]));\nconst MIN = 1000 * 60;\n\nconst clean = s => String(s ?? '').replace(/[\\u0000-\\u001F\\u007F]/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\nconst cap = (s, n) => clean(s).slice(0, n);\nconst EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/;\n\n// Row shape: \"<serial> <name> <email> <title> <company>\"\nconst rows = raw.split('\\n').map(l => l.trim()).filter(Boolean)\n  .filter(l => !/^s\\/?no\\.?\\s+name\\s+emai?l/i.test(l));       // header, incl. the \"Emai\" typo\n\nconst seen = new Set();\nconst out = [];\nlet parseFailures = 0, duplicates = 0, notRetryable = 0;\n\nfor (const line of rows) {\n  const m = line.match(/^(\\d{1,6})\\s+(.*)$/);\n  if (!m) { parseFailures++; continue; }\n  const body = m[2];\n  const em = body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/);\n  if (!em || !EMAIL.test(em[0])) { parseFailures++; continue; }\n\n  const email = em[0].toLowerCase();\n  const before = body.slice(0, body.indexOf(em[0])).trim();          // name\n  const after  = body.slice(body.indexOf(em[0]) + em[0].length).trim(); // title + company\n  if (!before) { parseFailures++; continue; }\n\n  const parts = after ? after.split(/\\s{2,}|\\s*[|•·]\\s*/).filter(Boolean) : [];\n  const title   = cap(parts[0] ?? '', 120);\n  const company = cap(parts.slice(1).join(' ') || '', 120);\n\n  const hash = sha256hex(email);\n  if (!hash) { parseFailures++; continue; }\n\n  if (seen.has(hash)) { duplicates++; continue; }          // repeated inside this PDF\n  seen.add(hash);\n\n  const p = prior.get(hash);\n  if (p?.status === 'done') { duplicates++; continue; }    // finished in an earlier run\n\n  // A prior row that failed, or is a stale pending claim, is retried — but only while\n  // attempt < 2, so a permanently bad lead cannot be retried forever.\n  let ledgerState = 'new', attempt = 0;\n  if (p) {\n    const stale = Date.now() - new Date(p.updated_at ?? 0).getTime() > 120 * MIN;\n    const eligible = Number(p.attempt ?? 0) < 2 &&\n      (p.status === 'failed' || (p.status === 'pending' && stale));\n    if (!eligible) { notRetryable++; continue; }\n    ledgerState = 'retry';\n    attempt = Number(p.attempt ?? 0);\n  }\n\n  out.push({ json: {\n    lead_id: m[1], name: cap(before, 80), email,\n    title: cap(title, 120), company: cap(company, 120),\n    email_hash: hash, email_domain: email.split('@')[1],\n    run_id: gate.run_id, attempt, enrichment_note: '',\n    ledger_state: ledgerState,\n  }});\n}\n\nconst pct = rows.length ? (parseFailures / rows.length) * 100 : 100;\nif (rows.length === 0 || pct > (gate.max_parse_failure_pct ?? 2)) {\n  throw new Error(`Parse gate failed: ${parseFailures}/${rows.length} rows unparsed (${pct.toFixed(1)}%). No drafts created.`);\n}\n\n// `max_drafts` is a hard ceiling on the run — retries included. Retries are emitted\n// first so fresh work cannot starve leftover work; `attempt < 2` bounds that to at\n// most two runs. Anything not emitted stays unclaimed (new) or retryable (failed),\n// so a later run picks it up on its own.\nconst newLeads   = out.filter(r => r.json.ledger_state === 'new');\nconst retryLeads = out.filter(r => r.json.ledger_state === 'retry');\nconst budget     = Math.max(1, Number(gate.max_drafts ?? 25));\nconst emitted    = [...retryLeads, ...newLeads].slice(0, budget);\nconst keptNew    = emitted.filter(r => r.json.ledger_state === 'new').length;\nconst deferred   = newLeads.length - keptNew;\n\nconst stats = {\n  total_parsed:   rows.length,\n  parse_failures: parseFailures,\n  duplicates,\n  not_retryable:  notRetryable,\n  deferred,\n  valid: emitted.length,\n};\n\nif (!emitted.length) return [{ json: { __no_leads: true, __stats: stats } }];\nreturn emitted.map(r => ({ json: { ...r.json, __stats: stats } }));\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000012",
+      "name": "11 Parse & Prepare Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2250,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "avail-1",
+              "leftValue": "={{ $json.__no_leads ?? false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000013",
+      "name": "12 Leads Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "update",
+        "tableId": "outreach_runs",
+        "dataToSend": "defineBelow",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Preflight Gate').first().json.run_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "no_leads"
+            },
+            {
+              "fieldId": "finished_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "blocked_reason",
+              "fieldValue": "no new valid leads after dedupe"
+            },
+            {
+              "fieldId": "total_parsed",
+              "fieldValue": "={{ $json.__stats?.total_parsed ?? 0 }}"
+            },
+            {
+              "fieldId": "parse_failures",
+              "fieldValue": "={{ $json.__stats?.parse_failures ?? 0 }}"
+            },
+            {
+              "fieldId": "duplicates",
+              "fieldValue": "={{ $json.__stats?.duplicates ?? 0 }}"
+            },
+            {
+              "fieldId": "deferred",
+              "fieldValue": "={{ $json.__stats?.deferred ?? 0 }}"
+            },
+            {
+              "fieldId": "valid",
+              "fieldValue": "={{ 0 }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000014",
+      "name": "13 Log Empty Run",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2500,
+        500
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "nr-1",
+              "leftValue": "={{ $json.ledger_state }}",
+              "rightValue": "new",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000015",
+      "name": "13a New Or Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "create",
+        "tableId": "outreach_ledger",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "email_hash",
+              "fieldValue": "={{ $json.email_hash }}"
+            },
+            {
+              "fieldId": "email_domain",
+              "fieldValue": "={{ $json.email_domain }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "pending"
+            },
+            {
+              "fieldId": "run_id",
+              "fieldValue": "={{ $json.run_id }}"
+            },
+            {
+              "fieldId": "attempt",
+              "fieldValue": "={{ $json.attempt }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000016",
+      "name": "14 Claim Ledger Rows",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const errs = $input.all().map(i => i.json?.error ?? i.json);\nconst msg  = errs.map(e => e?.message ?? String(e)).join(' | ').slice(0, 200);\nthrow new Error(\n  `${errs.length} ledger claim(s) failed — a concurrent run or a stale ledger read is the likely cause. ` +\n  `No further drafts were created. Detail: ${msg}`\n);\n// Unreachable: satisfies n8n-mcp's static \"Code must return data\" check. A throw\n// here is intentional and must terminate the workflow.\nreturn [];\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000017",
+      "name": "15 Abort On Claim Conflict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3250,
+        500
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const gate  = $('Preflight Gate').first().json;\nconst leads = $('Parse & Prepare Leads').all().map(i => i.json)\n                .filter(r => r && r.email_hash);\nconst byHash = new Map(leads.map(l => [l.email_hash, l]));\n\n// Two item kinds arrive here. Claim rows come back from Supabase and carry no\n// ledger_state; retry leads come from 13a and are still tagged. That is the\n// discriminator — no node references, no try/catch, works even when 14 never ran.\nconst input   = $input.all().map(i => i.json ?? {});\nconst claimed = input.filter(j => !j.ledger_state && j.email_hash).map(j => j.email_hash);\nconst retries = input.filter(j => j.ledger_state === 'retry' && j.email_hash);\n\nconst claimedSet = new Set(claimed);\nconst queue = [];\nfor (const h of claimed) {\n  const l = byHash.get(h);\n  if (l) queue.push({ ...l, attempt: 0 });\n}\nfor (const r of retries) {\n  if (claimedSet.has(r.email_hash)) continue;\n  queue.push({ ...r });\n}\n\n// Guards the one case the DB cannot: a lead that appears as both a fresh claim and a\n// retry. De-duplicating here is cheaper than a second PK collision.\nconst seen = new Set();\nconst final = queue.filter(q => {\n  if (seen.has(q.email_hash)) return false;\n  seen.add(q.email_hash);\n  return true;\n});\n\nif (!final.length) {\n  throw new Error('Dispatch queue is empty: every claim failed to join back to a parsed lead. Refusing to stall the loop.');\n}\n\nreturn final.map(q => ({ json: {\n  run_id: gate.run_id, lead_id: q.lead_id, name: q.name, email: q.email,\n  title: q.title ?? '', company: q.company ?? '',\n  email_hash: q.email_hash, attempt: Number(q.attempt ?? 0), enrichment_note: '',\n}}));\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000018",
+      "name": "16 Assemble Dispatch Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3250,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "batchSize": "={{ $('Preflight Gate').first().json.batch_size }}",
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000019",
+      "name": "17 Batch Of 25",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Draft batch outreach emails"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $json.run_id }}",
+            "lead_id": "={{ $json.lead_id }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company }}",
+            "email_hash": "={{ $json.email_hash }}",
+            "attempt": "={{ $json.attempt }}",
+            "enrichment_note": "={{ $json.enrichment_note }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "email_hash",
+              "displayName": "email_hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "attempt",
+              "displayName": "attempt",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "enrichment_note",
+              "displayName": "enrichment_note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000020",
+      "name": "18 Draft Batch Emails",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        3750,
+        300
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "maxItems": 1,
+        "keep": "firstItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000021",
+      "name": "19 Loop Guard",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        500
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "outreach_ledger",
+        "returnAll": true,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Preflight Gate').first().json.run_id }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000022",
+      "name": "20 Read Run Results",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4250,
+        500
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const gate = $('Preflight Gate').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r && r.email_hash);\nconst count = s => rows.filter(r => r.status === s).length;\nconst drafted = count('done'), failed = count('failed'), pending = count('pending');\n\n// Parse-time counters come from Node 11, which is the only node that knows them.\n// P21 must NOT reconstruct them from the ledger — the ledger has no idea how many\n// rows the PDF contained or how many were unreadable.\nconst stats = $('Parse & Prepare Leads').first()?.json?.__stats ?? {};\n\nreturn [{ json: {\n  run_id: gate.run_id,\n  status: drafted === 0 ? 'failed' : 'completed',\n  drafted, failed, pending,\n  total_parsed:   stats.total_parsed   ?? 0,\n  valid:          stats.valid          ?? rows.length,\n  duplicates:     stats.duplicates     ?? 0,\n  parse_failures: stats.parse_failures ?? 0,\n  deferred:       stats.deferred       ?? 0,\n}}];\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000023",
+      "name": "21 Build Run Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4500,
+        500
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "update",
+        "tableId": "outreach_runs",
+        "dataToSend": "defineBelow",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.run_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "drafted",
+              "fieldValue": "={{ $json.drafted }}"
+            },
+            {
+              "fieldId": "failed",
+              "fieldValue": "={{ $json.failed }}"
+            },
+            {
+              "fieldId": "total_parsed",
+              "fieldValue": "={{ $json.total_parsed }}"
+            },
+            {
+              "fieldId": "valid",
+              "fieldValue": "={{ $json.valid }}"
+            },
+            {
+              "fieldId": "duplicates",
+              "fieldValue": "={{ $json.duplicates }}"
+            },
+            {
+              "fieldId": "parse_failures",
+              "fieldValue": "={{ $json.parse_failures }}"
+            },
+            {
+              "fieldId": "deferred",
+              "fieldValue": "={{ $json.deferred }}"
+            },
+            {
+              "fieldId": "finished_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000024",
+      "name": "22 Log Run Outcome",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4750,
+        500
+      ],
+      "alwaysOutputData": true,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "content": "## PHASE 1 · PREFLIGHT & LOCKS\nNodes 1–7. Manual start → Supabase reads (config / active runs / ledger) → one decision gate.\n**Fails CLOSED** on: missing or non-`false` kill switch, active run < 4 h, invalid cap, unparseable PDF URL.\nBlocked path first writes `outreach_runs.status = blocked`, then throws (loud, legible).",
+        "height": 160,
+        "width": 1400,
+        "color": 7
+      },
+      "id": "a0000000-0000-4000-8000-000000000025",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 MANUAL CREDENTIALS — PHASE 1\n- **Supabase** (`supabaseApi`, secret key `sb_secret_…`): Read Run Config · Read Active Runs · Read Ledger Index · Log Blocked Run · Mark Run Running.\n- **Google Drive** (`googleDriveOAuth2Api`, scope `drive.readonly`): Download Leads PDF.\n- Publishable / legacy `service_role` keys are NOT accepted. OAuth consent in **Testing** ⇒ refresh token dies in 7 days.",
+        "height": 200,
+        "width": 1400,
+        "color": 3
+      },
+      "id": "a0000000-0000-4000-8000-000000000026",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## PHASE 2 · PARSE / CLAIM / QUEUE\nNodes 8–16. PDF binary → text → validated leads → PK claim → dispatch queue.\n`__stats` rides on every lead item so the run summary can never over-report.\n`13a` routes retries **around** the primary-key claim — that branch is not a dead end.",
+        "height": 160,
+        "width": 1850,
+        "color": 7
+      },
+      "id": "a0000000-0000-4000-8000-000000000027",
+      "name": "Sticky Note 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 MANUAL CREDENTIALS — PHASE 2\n- **Supabase** (`supabaseApi`): Claim Ledger Rows (INSERT, PK = `email_hash`) · Read Run Results · Log Run Outcome.\n- The primary key **is** the idempotency gate; the §1.4 DDL is not optional.\n- Gemini / Gmail credentials are attached in the child workflow, not here.",
+        "height": 200,
+        "width": 1850,
+        "color": 3
+      },
+      "id": "a0000000-0000-4000-8000-000000000028",
+      "name": "Sticky Note 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## PHASE 3 · BATCH LOOP & RUN LOG\nNodes 17–22. One batch (≤25) in flight at a time → child workflow → summary counted from the ledger.\nLoop-back edge: `18 → 17`. Done output: `17 main[0] → 19 Loop Guard` (max 1 item).",
+        "height": 160,
+        "width": 1750,
+        "color": 7
+      },
+      "id": "a0000000-0000-4000-8000-000000000029",
+      "name": "Sticky Note 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3350,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 MANUAL CREDENTIALS & WIRING — PHASE 3\n- **Supabase** (`supabaseApi`): Log Run Outcome.\n- **Child workflow**: `18 Draft Batch Emails` imports with an **empty** `workflowId` — re-pick “Draft batch outreach emails” in the dropdown.\n- Assign **`Ops: log outreach failure`** as the Error Workflow (Workflow Settings → UI only).",
+        "height": 200,
+        "width": 1750,
+        "color": 3
+      },
+      "id": "a0000000-0000-4000-8000-000000000030",
+      "name": "Sticky Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3350,
+        640
+      ]
+    }
+  ],
+  "connections": {
+    "1 Start Batch": {
+      "main": [
+        [
+          {
+            "node": "2 Read Run Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 Read Run Config": {
+      "main": [
+        [
+          {
+            "node": "3 Read Active Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 Read Active Runs": {
+      "main": [
+        [
+          {
+            "node": "4 Read Ledger Index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 Read Ledger Index": {
+      "main": [
+        [
+          {
+            "node": "5 Preflight Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 Preflight Gate": {
+      "main": [
+        [
+          {
+            "node": "6 Clear To Run?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 Clear To Run?": {
+      "main": [
+        [
+          {
+            "node": "8 Mark Run Running",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6a Log Blocked Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6a Log Blocked Run": {
+      "main": [
+        [
+          {
+            "node": "7 Run Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 Mark Run Running": {
+      "main": [
+        [
+          {
+            "node": "9 Download Leads PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9 Download Leads PDF": {
+      "main": [
+        [
+          {
+            "node": "10 Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "11 Parse & Prepare Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 Parse & Prepare Leads": {
+      "main": [
+        [
+          {
+            "node": "12 Leads Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 Leads Available?": {
+      "main": [
+        [
+          {
+            "node": "13a New Or Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "13 Log Empty Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13a New Or Retry?": {
+      "main": [
+        [
+          {
+            "node": "14 Claim Ledger Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "16 Assemble Dispatch Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14 Claim Ledger Rows": {
+      "main": [
+        [
+          {
+            "node": "16 Assemble Dispatch Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "15 Abort On Claim Conflict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16 Assemble Dispatch Queue": {
+      "main": [
+        [
+          {
+            "node": "17 Batch Of 25",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17 Batch Of 25": {
+      "main": [
+        [
+          {
+            "node": "19 Loop Guard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "18 Draft Batch Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "18 Draft Batch Emails": {
+      "main": [
+        [
+          {
+            "node": "17 Batch Of 25",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "19 Loop Guard": {
+      "main": [
+        [
+          {
+            "node": "20 Read Run Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 Read Run Results": {
+      "main": [
+        [
+          {
+            "node": "21 Build Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "21 Build Run Summary": {
+      "main": [
+        [
+          {
+            "node": "22 Log Run Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Lagos",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "pinData": {}
+}

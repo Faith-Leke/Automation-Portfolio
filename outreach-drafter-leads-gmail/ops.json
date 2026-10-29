@@ -1,0 +1,142 @@
+{
+  "name": "Ops: log outreach failure",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a0000000-0000-4000-8000-000000000047",
+      "name": "1 Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $json.execution ?? {};\nconst w = $json.workflow ?? {};\nconst msg = String(e.error?.message ?? 'unknown')\n  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/g, '<redacted>')\n  .replace(/\\s+/g, ' ').slice(0, 200);\nreturn [{ json: {\n  run_id: (msg.match(/run_\\d{8}_\\d{4}/) ?? [null])[0],\n  workflow: String(w.name ?? 'unknown').slice(0, 80),\n  node: String(e.lastNodeExecuted ?? 'unknown').slice(0, 80),\n  error_code: String(e.error?.name ?? e.error?.code ?? 'unknown').slice(0, 60),\n  error_message: msg,\n}}];\n",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "a0000000-0000-4000-8000-000000000048",
+      "name": "2 Build Failure Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "secretKey",
+        "resource": "row",
+        "operation": "create",
+        "tableId": "outreach_failures",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "run_id",
+              "fieldValue": "={{ $json.run_id }}"
+            },
+            {
+              "fieldId": "workflow",
+              "fieldValue": "={{ $json.workflow }}"
+            },
+            {
+              "fieldId": "node",
+              "fieldValue": "={{ $json.node }}"
+            },
+            {
+              "fieldId": "error_code",
+              "fieldValue": "={{ $json.error_code }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "occurred_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000049",
+      "name": "3 Log Failure",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "content": "## PHASE 1 · FAILURE CAPTURE\nCatch-all sink for anything that escapes per-node handling. Writes Postgres, never Gmail — recursion-safe.\n**Must be assigned as the Error Workflow** on BOTH the parent and the child (Workflow Settings → UI only).",
+        "height": 160,
+        "width": 800,
+        "color": 7
+      },
+      "id": "a0000000-0000-4000-8000-000000000050",
+      "name": "Sticky Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 MANUAL CREDENTIALS\n- **Supabase** (`supabaseApi`, secret key): `3 Log Failure` → `outreach_failures`.\n- Redacts email-shaped substrings and caps the message at 200 chars before any write.",
+        "height": 160,
+        "width": 800,
+        "color": 3
+      },
+      "id": "a0000000-0000-4000-8000-000000000051",
+      "name": "Sticky Note 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "1 Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "2 Build Failure Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 Build Failure Record": {
+      "main": [
+        [
+          {
+            "node": "3 Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Lagos",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "pinData": {}
+}
